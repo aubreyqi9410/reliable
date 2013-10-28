@@ -27,6 +27,7 @@ struct reliable_state {
   /* My additions */
 
   int timeout;
+  int window;
   bq_t *send_bq;
   int send_seqno;
   bq_t *rec_bq;
@@ -74,6 +75,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   /* My additions */
 
   r->timeout = cc->timeout;
+  r->window = cc->window;
   r->send_bq = bq_new(cc->window, sizeof(send_bq_element_t));
   bq_increase_head_seq_to(r->send_bq,1);
   r->send_seqno = 1;
@@ -155,7 +157,7 @@ rel_recvack (rel_t *r, int ackno)
         if (!elem->sent) {
             elem->time_sent = clock();
             elem->sent = 1;
-            conn_sendpkt(r->c, &elem.pkt, 12 + len);
+            conn_sendpkt(r->c, &(elem->pkt), ntohl(elem->pkt.len));
         }
     }
 
@@ -266,7 +268,7 @@ rel_timer ()
                 if (ms_diff > r->timeout) {
                     elem->time_sent = now;
                     elem->sent = 1;
-                    conn_sendpkt(r->c, &elem->pkt, elem->pkt.len);
+                    conn_sendpkt(r->c, &elem->pkt, nothl(elem->pkt.len));
                 }
             }
         }
