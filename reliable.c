@@ -111,7 +111,7 @@ int
 rel_packet_valid (packet_t *pkt, size_t n)
 {
     if (pkt->len > n) return 0;
-    int cksum_buf = ntohs(pkt->cksum);
+    int cksum_buf = pkt->cksum;
     pkt->cksum = 0;
     if (cksum_buf != cksum(pkt, n)) return 0;
     return 1;
@@ -125,7 +125,7 @@ rel_send_ack (rel_t *r, int ackno)
 
     ack_packet.len = htons(8);
     ack_packet.cksum = 0;
-    ack_packet.cksum = htons(cksum(&ack_packet, 8));
+    ack_packet.cksum = cksum(&ack_packet, 8);
 
     conn_sendpkt (r->c, &ack_packet, 8);
 }
@@ -188,7 +188,7 @@ rel_read (rel_t *r)
 
         elem.pkt.len = htons(12 + len);
         elem.pkt.cksum = 0;
-        elem.pkt.cksum = htons(cksum(&elem.pkt, 12 + len));
+        elem.pkt.cksum = cksum(&elem.pkt, 12 + len);
 
         /* Make a note of this packet, so we can resend */
         elem.time_sent = clock();
