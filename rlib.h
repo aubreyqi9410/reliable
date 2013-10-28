@@ -268,7 +268,7 @@ void rel_demux (const struct config_common *cc,
 /* Notification handlers */
 void rel_read (rel_t *);    /* Invoked when you can call conn_input */
 void rel_output (rel_t *);  /* Invoked when some output drained */
-void rel_timer (); /* Invoked roughly each timer/5 milliseconds */
+void rel_timer (void); /* Invoked roughly each timer/5 milliseconds */
 
 
 

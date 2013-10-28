@@ -167,7 +167,6 @@ rel_read (rel_t *r)
         if (r->send_seqno > bq_get_tail_seq(r->send_bq)) return;
 
         int len = conn_input(r->c, &(elem.pkt.data[0]), 500);
-        rel_DEBUG(&(elem.pkt.data[0]), len);
 
         if (len == 0) return;
         if (len == -1) {
