@@ -154,7 +154,7 @@ rel_recvack (rel_t *r, int ackno)
 {
     printf("Ack %i\n",ackno);
     int i;
-    for (i = bq_get_head_seq(r->send_bq); i < ackno - 1 + r->window; i++) {
+    for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
         printf("- thinking of sending %i\n", i);
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
