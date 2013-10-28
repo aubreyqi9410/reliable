@@ -155,6 +155,7 @@ rel_recvack (rel_t *r, int ackno)
     printf("Ack %i\n",ackno);
     int i;
     for (i = bq_get_head_seq(r->send_bq); i < ackno - 1 + r->window; i++) {
+        printf("- thinking of sending %i\n", i);
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
             printf("-> Sending %i\n",i);
@@ -198,6 +199,7 @@ rel_read (rel_t *r)
             len = 0; /* send an EOF */
             printf("EOF\n");
         }
+        printf("Read packet %i\n",r->send_seqno);
         rel_DEBUG(&(elem.pkt.data[0]),len);
 
         elem.pkt.ackno = htonl(0); /* TODO */
