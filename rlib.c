@@ -500,13 +500,9 @@ conn_mkevents (void)
     
   for (c = conn_list; c; c = c->next) {
     if (c->rpoll) {
-        printf("Read poll\n");
       e[c->rpoll].fd = c->rfd;
-      printf("XOff: %i\n",c->xoff);
-      if (!(c->xoff)) {
-	    e[c->rpoll].events |= POLLIN;
-        printf("Read poll in!\n");
-      }
+      if (!c->xoff)
+	e[c->rpoll].events |= POLLIN;
     }
     if (c->wpoll) {
       e[c->wpoll].fd = c->wfd;
@@ -578,7 +574,6 @@ need_timer_in (const struct timespec *last, long timer)
 void
 conn_poll (const struct config_common *cc)
 {
-    printf("Polling\n");
   //int n, i;
   int  i;
   conn_t *c, *nc;
@@ -595,11 +590,8 @@ conn_poll (const struct config_common *cc)
     poll (cevents+1, ncevents-1, need_timer_in (&last_timeout, cc->timer));
 
   for (i = 1; i < ncevents; i++) {
-      printf("Polling %i: %x\n",i,cevents[i].fd);
     if (cevents[i].revents & (POLLIN|POLLERR|POLLHUP)) {
-        printf("Got a poll flag\n");
       if ((c = evreaders[i]) && !c->delete_me) {
-          printf("EV Readers\n");
 	if (cevents[i].fd == c->rfd) {
 	  c->xoff = 1;
 	  cevents[i].events &= ~POLLIN;

@@ -152,10 +152,12 @@ rel_demux (const struct config_common *cc,
 void
 rel_recvack (rel_t *r, int ackno)
 {
+    printf("Ack %i\n",ackno);
     int i;
     for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
+            printf("-> Sending %i\n",i);
             elem->time_sent = clock();
             elem->sent = 1;
             conn_sendpkt(r->c, &(elem->pkt), ntohl(elem->pkt.len));
@@ -190,10 +192,7 @@ rel_read (rel_t *r)
 
         int len = conn_input(r->c, &(elem.pkt.data[0]), 500);
 
-        if (len == 0) {
-            printf("Read nothing\n");
-            return;
-        }
+        if (len == 0) return;
         if (len == -1) {
             len = 0; /* send an EOF */
             printf("EOF\n");
