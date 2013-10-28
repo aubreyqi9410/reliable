@@ -158,7 +158,7 @@ rel_recvack (rel_t *r, int ackno)
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
             printf("-> Sending %i\n",i);
-            rel_DEBUG(&(elem->pkt), ntohl(elem->pkt.len));
+            rel_DEBUG(&(elem->pkt.data[0]), ntohl(elem->pkt.len)-12);
             elem->time_sent = clock();
             elem->sent = 1;
             conn_sendpkt(r->c, &(elem->pkt), ntohl(elem->pkt.len));
