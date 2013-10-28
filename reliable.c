@@ -268,7 +268,7 @@ rel_timer ()
                 if (ms_diff > r->timeout) {
                     elem->time_sent = now;
                     elem->sent = 1;
-                    conn_sendpkt(r->c, &elem->pkt, nothl(elem->pkt.len));
+                    conn_sendpkt(r->c, &elem->pkt, ntohl(elem->pkt.len));
                 }
             }
         }
