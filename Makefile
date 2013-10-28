@@ -25,9 +25,9 @@ all: uc reliable
 uc: uc.o
 	$(CC) $(CFLAGS) -pthread -o $@ uc.o $(LIBS)
 
-rlib.o reliable.o: rlib.h
+rlib.o reliable.o bq.o: rlib.h bq.h
 
-reliable: reliable.o rlib.o
+reliable: bq.o reliable.o rlib.o
 	$(CC) $(CFLAGS) -o $@ reliable.o rlib.o $(LIBS) $(LIBRT)
 
 .PHONY: tester reference

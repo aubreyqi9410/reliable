@@ -642,7 +642,7 @@ conn_poll (const struct config_common *cc)
   }
 
   if (need_timer_in (&last_timeout, cc->timer) == 0) {
-    rel_timer ();
+    rel_timer (c->rel);
     clock_gettime (CLOCK_MONOTONIC, &last_timeout);
   }
 
