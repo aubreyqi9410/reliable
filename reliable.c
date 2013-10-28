@@ -74,8 +74,10 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   r->timeout = cc->timeout;
   r->send_bq = bq_new(cc->window, sizeof(send_bq_element_t));
+  bq_increase_head_seq_to(r->send_bq,1);
   r->send_seqno = 1;
   r->rec_bq = bq_new(cc->window, sizeof(packet_t));
+  bq_increase_head_seq_to(r->rec_bq,1);
 
   return r;
 }
@@ -109,7 +111,7 @@ int
 rel_packet_valid (packet_t *pkt, size_t n)
 {
     if (pkt->len > n) return 0;
-    int cksum_buf = pkt->cksum;
+    int cksum_buf = ntohs(pkt->cksum);
     pkt->cksum = 0;
     if (cksum_buf != cksum(pkt, n)) return 0;
     return 1;
@@ -119,11 +121,11 @@ void
 rel_send_ack (rel_t *r, int ackno)
 {
     packet_t ack_packet;
-    ack_packet.ackno = ackno;
+    ack_packet.ackno = htonl(ackno);
 
-    ack_packet.len = 8;
+    ack_packet.len = htons(8);
     ack_packet.cksum = 0;
-    ack_packet.cksum = cksum(&ack_packet, 8);
+    ack_packet.cksum = htons(cksum(&ack_packet, 8));
 
     conn_sendpkt (r->c, &ack_packet, 8);
 }
@@ -163,8 +165,8 @@ rel_read (rel_t *r)
     send_bq_element_t elem;
 
     while (1) {
-        /* Stay within the window, but window is 0 indexed, send seqno is 1 indexed */
-        if (r->send_seqno > bq_get_tail_seq(r->send_bq) + 1) {
+        /* Stay within the window */
+        if (r->send_seqno > bq_get_tail_seq(r->send_bq)) {
             printf("Done reading: send seqno %i, tail seqno %i\n", r->send_seqno, bq_get_tail_seq(r->send_bq));
             return;
         }
@@ -181,12 +183,12 @@ rel_read (rel_t *r)
         }
         rel_DEBUG(&(elem.pkt.data[0]),len);
 
-        elem.pkt.ackno = 0; /* TODO */
-        elem.pkt.seqno = r->send_seqno;
+        elem.pkt.ackno = htonl(0); /* TODO */
+        elem.pkt.seqno = htonl(r->send_seqno);
 
-        elem.pkt.len = 12 + len;
+        elem.pkt.len = htons(12 + len);
         elem.pkt.cksum = 0;
-        elem.pkt.cksum = cksum(&elem.pkt, 12 + len);
+        elem.pkt.cksum = htons(cksum(&elem.pkt, 12 + len));
 
         /* Make a note of this packet, so we can resend */
         elem.time_sent = clock();
