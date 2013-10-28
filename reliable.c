@@ -165,7 +165,7 @@ rel_read (rel_t *r)
     while (1) {
         /* Stay within the window */
         if (r->send_seqno > bq_get_tail_seq(r->send_bq)) {
-            printf("Done reading\n");
+            printf("Done reading: send seqno %i, tail seqno %i\n", r->send_seqno, bq_get_tail_seq(r->send_bq));
             return;
         }
 
