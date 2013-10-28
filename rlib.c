@@ -503,8 +503,10 @@ conn_mkevents (void)
         printf("Read poll\n");
       e[c->rpoll].fd = c->rfd;
       printf("XOff: %i\n",c->xoff);
-      if (!c->xoff)
+      if (!(c->xoff)) {
 	    e[c->rpoll].events |= POLLIN;
+        printf("Read poll in!\n");
+      }
     }
     if (c->wpoll) {
       e[c->wpoll].fd = c->wfd;
@@ -595,7 +597,9 @@ conn_poll (const struct config_common *cc)
   for (i = 1; i < ncevents; i++) {
       printf("Polling %i: %x\n",i,cevents[i].fd);
     if (cevents[i].revents & (POLLIN|POLLERR|POLLHUP)) {
+        printf("Got a poll flag\n");
       if ((c = evreaders[i]) && !c->delete_me) {
+          printf("EV Readers\n");
 	if (cevents[i].fd == c->rfd) {
 	  c->xoff = 1;
 	  cevents[i].events &= ~POLLIN;
