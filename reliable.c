@@ -36,6 +36,7 @@ rel_t *rel_list;
 
 
 typedef struct send_bq_element {
+    int sent;
     clock_t time_sent;
     packet_t pkt;
 } send_bq_element_t;
@@ -146,16 +147,28 @@ rel_demux (const struct config_common *cc,
 }
 
 void
-rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
+rel_recvack (rel_t *r, int ackno)
 {
-    if (!rel_packet_valid(pkt,n)) {
-        printf("Discarding invalid packet checksum\n");
-        return;
+    int i;
+    for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
+        send_bq_element_t *elem = bq_get_element(r->send_bq, i);
+        if (!elem->sent) {
+            elem->time_sent = clock();
+            elem->sent = 1;
+            conn_sendpkt(r->c, &elem.pkt, 12 + len);
+        }
     }
 
+    bq_increase_head_seq_to(r->send_bq, ackno);
+}
+
+void
+rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
+{
+    if (!rel_packet_valid(pkt,n)) return;
+
     /* Ack */
-    printf("Ack received, increasing head to %i\n",ntohl(pkt->ackno));
-    bq_increase_head_seq_to(r->send_bq, ntohl(pkt->ackno));
+    rel_recvack (r, ntohl(pkt->ackno));
 
     /* Data */
     if (n > 8) {
@@ -169,11 +182,8 @@ rel_read (rel_t *r)
     send_bq_element_t elem;
 
     while (1) {
-        /* Stay within the window */
-        if (r->send_seqno > bq_get_tail_seq(r->send_bq)) {
-            printf("Done reading: send seqno %i, tail seqno %i\n", r->send_seqno, bq_get_tail_seq(r->send_bq));
-            return;
-        }
+        /* Double check we're not running out of buffer space */
+        if (r->send_seqno > bq_get_tail_seq(r->send_bq)) return;
 
         int len = conn_input(r->c, &(elem.pkt.data[0]), 500);
 
@@ -183,7 +193,7 @@ rel_read (rel_t *r)
         }
         if (len == -1) {
             len = 0; /* send an EOF */
-            printf("Sending an EOF\n");
+            printf("EOF\n");
         }
         rel_DEBUG(&(elem.pkt.data[0]),len);
 
@@ -194,11 +204,16 @@ rel_read (rel_t *r)
         elem.pkt.cksum = 0;
         elem.pkt.cksum = cksum(&elem.pkt, 12 + len);
 
-        /* Make a note of this packet, so we can resend */
-        elem.time_sent = clock();
-        bq_insert_at(r->send_bq, r->send_seqno, &elem);
+        if (r->send_seqno < bq_get_head_seq(r->send_bq) + r->window) {
+            elem.time_sent = clock();
+            elem.sent = 1;
+            conn_sendpkt(r->c, &elem.pkt, 12 + len);
+        }
+        else {
+            elem.sent = 0;
+        }
 
-        conn_sendpkt(r->c, &elem.pkt, 12 + len);
+        bq_insert_at(r->send_bq, r->send_seqno, &elem);
 
         r->send_seqno ++;
 
@@ -241,7 +256,7 @@ rel_timer ()
     rel_t *r = rel_list;
     while (r != NULL) {
         int i = 0;
-        for (i = bq_get_head_seq(r->send_bq); i < bq_get_tail_seq(r->send_bq); i++) {
+        for (i = bq_get_head_seq(r->send_bq); i < bq_get_head_seq(r->send_bq) + r->window; i++) {
             if (bq_element_available(r->send_bq, i)) {
                 send_bq_element_t *elem = bq_get_element(r->send_bq, i);
 
@@ -250,6 +265,7 @@ rel_timer ()
 
                 if (ms_diff > r->timeout) {
                     elem->time_sent = now;
+                    elem->sent = 1;
                     conn_sendpkt(r->c, &elem->pkt, elem->pkt.len);
                 }
             }
