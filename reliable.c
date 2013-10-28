@@ -110,7 +110,7 @@ rel_DEBUG (char *c, size_t n)
 int 
 rel_packet_valid (packet_t *pkt, size_t n)
 {
-    if (pkt->len > n) return 0;
+    if (ntohs(pkt->len) > n) return 0;
     int cksum_buf = pkt->cksum;
     pkt->cksum = 0;
     if (cksum_buf != cksum(pkt, n)) return 0;
