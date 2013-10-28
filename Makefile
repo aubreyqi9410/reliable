@@ -25,7 +25,7 @@ all: uc reliable
 uc: uc.o
 	$(CC) $(CFLAGS) -pthread -o $@ uc.o $(LIBS)
 
-rlib.o reliable.o bq.o: rlib.h bq.h
+bq.o rlib.o reliable.o: bq.h rlib.h
 
 reliable: bq.o reliable.o rlib.o
 	$(CC) $(CFLAGS) -o $@ reliable.o rlib.o $(LIBS) $(LIBRT)
