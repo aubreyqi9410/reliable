@@ -94,6 +94,17 @@ rel_destroy (rel_t *r)
   bq_destroy(r->rec_bq);
 }
 
+void
+rel_DEBUG (char *c, size_t n)
+{
+    printf("\nDEBUG\n");
+    int i;
+    for (i = 0; i < n; i++) {
+        printf("%c",c[i]);
+    }
+    printf("\n");
+}
+
 int 
 rel_packet_valid (packet_t *pkt, size_t n)
 {
@@ -155,7 +166,9 @@ rel_read (rel_t *r)
         /* Stay within the window */
         if (r->send_seqno > bq_get_tail_seq(r->send_bq)) return;
 
-        int len = conn_input(r->c, &elem.pkt.data, 500);
+        int len = conn_input(r->c, &(elem.pkt.data[0]), 500);
+        rel_DEBUG(&(elem.pkt.data[0]), len);
+
         if (len == 0) return;
         if (len == -1) {
             len = 0; /* send an EOF */
