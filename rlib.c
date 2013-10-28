@@ -591,10 +591,10 @@ conn_poll (const struct config_common *cc)
     poll (cevents+1, ncevents-1, need_timer_in (&last_timeout, cc->timer));
 
   for (i = 1; i < ncevents; i++) {
+      printf("Polling %i: %x\n",i,cevents[i].fd);
     if (cevents[i].revents & (POLLIN|POLLERR|POLLHUP)) {
       if ((c = evreaders[i]) && !c->delete_me) {
 	if (cevents[i].fd == c->rfd) {
-        printf("Polling read file descriptor\n");
 	  c->xoff = 1;
 	  cevents[i].events &= ~POLLIN;
 	  rel_read (c->rel);
