@@ -151,7 +151,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     if (!rel_packet_valid(pkt,n)) return;
 
     /* Ack */
-    printf("Ack received, increasing head to %i\n",nothl(pkt->ackno));
+    printf("Ack received, increasing head to %i\n",ntohl(pkt->ackno));
     bq_increase_head_seq_to(r->send_bq, ntohl(pkt->ackno));
 
     /* Data */
