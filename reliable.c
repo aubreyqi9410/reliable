@@ -163,8 +163,8 @@ rel_read (rel_t *r)
     send_bq_element_t elem;
 
     while (1) {
-        /* Stay within the window */
-        if (r->send_seqno > bq_get_tail_seq(r->send_bq)) {
+        /* Stay within the window, but window is 0 indexed, send seqno is 1 indexed */
+        if (r->send_seqno > bq_get_tail_seq(r->send_bq) + 1) {
             printf("Done reading: send seqno %i, tail seqno %i\n", r->send_seqno, bq_get_tail_seq(r->send_bq));
             return;
         }
