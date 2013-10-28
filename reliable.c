@@ -154,10 +154,11 @@ rel_recvack (rel_t *r, int ackno)
 {
     printf("Ack %i\n",ackno);
     int i;
-    for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
+    for (i = bq_get_head_seq(r->send_bq); i < ackno - 1 + r->window; i++) {
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
             printf("-> Sending %i\n",i);
+            rel_DEBUG(&(elem->pkt), ntohl(elem->pkt.len));
             elem->time_sent = clock();
             elem->sent = 1;
             conn_sendpkt(r->c, &(elem->pkt), ntohl(elem->pkt.len));
