@@ -500,9 +500,11 @@ conn_mkevents (void)
     
   for (c = conn_list; c; c = c->next) {
     if (c->rpoll) {
+        printf("Read poll\n");
       e[c->rpoll].fd = c->rfd;
+      printf("XOff: %i\n",c->xoff);
       if (!c->xoff)
-	e[c->rpoll].events |= POLLIN;
+	    e[c->rpoll].events |= POLLIN;
     }
     if (c->wpoll) {
       e[c->wpoll].fd = c->wfd;
