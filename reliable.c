@@ -209,21 +209,25 @@ rel_output (rel_t *r)
 }
 
 void
-rel_timer (rel_t *r)
+rel_timer ()
 {
     /* Retransmit any packets that need to be retransmitted */
-    int i = 0;
-    for (i = bq_get_head_seq(r->send_bq); i < bq_get_tail_seq(r->send_bq); i++) {
-        if (bq_element_available(r->send_bq, i)) {
-            send_bq_element_t *elem = bq_get_element(r->send_bq, i);
+    rel_t *r = rel_list;
+    while (r != NULL) {
+        int i = 0;
+        for (i = bq_get_head_seq(r->send_bq); i < bq_get_tail_seq(r->send_bq); i++) {
+            if (bq_element_available(r->send_bq, i)) {
+                send_bq_element_t *elem = bq_get_element(r->send_bq, i);
 
-            clock_t now = clock();
-            int ms_diff = (int)((((float)elem->time_sent - (float)now) / CLOCKS_PER_SEC) * 1000);
+                clock_t now = clock();
+                int ms_diff = (int)((((float)elem->time_sent - (float)now) / CLOCKS_PER_SEC) * 1000);
 
-            if (ms_diff > r->timeout) {
-                elem->time_sent = now;
-                conn_sendpkt(r->c, &elem->pkt, elem->pkt.len);
+                if (ms_diff > r->timeout) {
+                    elem->time_sent = now;
+                    conn_sendpkt(r->c, &elem->pkt, elem->pkt.len);
+                }
             }
         }
+        r = r->next;
     }
 }
