@@ -148,7 +148,10 @@ rel_demux (const struct config_common *cc,
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
-    if (!rel_packet_valid(pkt,n)) return;
+    if (!rel_packet_valid(pkt,n)) {
+        printf("Discarding invalid packet checksum\n");
+        return;
+    }
 
     /* Ack */
     printf("Ack received, increasing head to %i\n",ntohl(pkt->ackno));
