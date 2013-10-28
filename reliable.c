@@ -164,14 +164,22 @@ rel_read (rel_t *r)
 
     while (1) {
         /* Stay within the window */
-        if (r->send_seqno > bq_get_tail_seq(r->send_bq)) return;
+        if (r->send_seqno > bq_get_tail_seq(r->send_bq)) {
+            printf("Done reading\n");
+            return;
+        }
 
         int len = conn_input(r->c, &(elem.pkt.data[0]), 500);
 
-        if (len == 0) return;
+        if (len == 0) {
+            printf("Read nothing\n");
+            return;
+        }
         if (len == -1) {
             len = 0; /* send an EOF */
+            printf("Sending an EOF\n");
         }
+        rel_DEBUG(&(elem.pkt.data[0]),len);
 
         elem.pkt.ackno = 0; /* TODO */
         elem.pkt.seqno = r->send_seqno;
