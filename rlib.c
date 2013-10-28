@@ -594,6 +594,7 @@ conn_poll (const struct config_common *cc)
     if (cevents[i].revents & (POLLIN|POLLERR|POLLHUP)) {
       if ((c = evreaders[i]) && !c->delete_me) {
 	if (cevents[i].fd == c->rfd) {
+        printf("Polling read file descriptor\n");
 	  c->xoff = 1;
 	  cevents[i].events &= ~POLLIN;
 	  rel_read (c->rel);
@@ -1121,7 +1122,6 @@ main (int argc, char **argv)
     cn->rel = rel_create (cn, NULL, &c);
 
     conn_mkevents ();
-    if (!conn_list) printf("No conn_list\n");
     while (conn_list)
       conn_poll (&c);
   }
