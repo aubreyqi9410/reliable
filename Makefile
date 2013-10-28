@@ -28,7 +28,7 @@ uc: uc.o
 bq.o rlib.o reliable.o: bq.h rlib.h
 
 reliable: bq.o reliable.o rlib.o
-	$(CC) $(CFLAGS) -o $@ reliable.o rlib.o $(LIBS) $(LIBRT)
+	$(CC) $(CFLAGS) -o $@ bq.o reliable.o rlib.o $(LIBS) $(LIBRT)
 
 .PHONY: tester reference
 tester reference:
