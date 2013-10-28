@@ -16,6 +16,7 @@
 #include "rlib.h"
 #include "bq.h"
 
+#define SEND_BUFFER_SIZE 500
 
 
 struct reliable_state {
@@ -76,7 +77,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   r->timeout = cc->timeout;
   r->window = cc->window;
-  r->send_bq = bq_new(cc->window, sizeof(send_bq_element_t));
+  r->send_bq = bq_new(SEND_BUFFER_SIZE, sizeof(send_bq_element_t));
   bq_increase_head_seq_to(r->send_bq,1);
   r->send_seqno = 1;
   r->rec_bq = bq_new(cc->window, sizeof(packet_t));
