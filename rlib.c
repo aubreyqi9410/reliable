@@ -1121,6 +1121,7 @@ main (int argc, char **argv)
     cn->rel = rel_create (cn, NULL, &c);
 
     conn_mkevents ();
+    if (!conn_list) printf("No conn_list\n");
     while (conn_list)
       conn_poll (&c);
   }
