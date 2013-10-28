@@ -103,7 +103,7 @@ rel_destroy (rel_t *r)
 void
 rel_DEBUG (char *c, size_t n)
 {
-    printf("\nDEBUG %i chars\n", n);
+    printf("\nDEBUG %i chars\n", (int)n);
     int i;
     for (i = 0; i < n; i++) {
         printf("%c",c[i]);
