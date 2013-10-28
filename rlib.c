@@ -574,6 +574,7 @@ need_timer_in (const struct timespec *last, long timer)
 void
 conn_poll (const struct config_common *cc)
 {
+    printf("Polling\n");
   //int n, i;
   int  i;
   conn_t *c, *nc;
