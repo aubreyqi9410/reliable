@@ -16,7 +16,7 @@ int bq_contains_index(bq_t* bq, int index)
 int bq_index_to_offset(bq_t* bq, int index)
 {
     assert(index >= bq_get_head_seq(bq) && index >= 0);
-    return (index - bq_get_head_seq(bq)) % bq->num_elements;
+    return index % bq->num_elements;
 }
 
 /* 
