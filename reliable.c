@@ -108,7 +108,7 @@ rel_DEBUG (char *c, size_t n)
     for (i = 0; i < n; i++) {
         printf("%c",c[i]);
     }
-    printf("\n");
+    printf("\n\n");
 }
 
 int 
@@ -155,8 +155,8 @@ rel_recvack (rel_t *r, int ackno)
     printf("Ack %i\n",ackno);
     int i;
     for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
-        printf("- thinking of sending %i\n", i);
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
+        printf("- thinking of sending %i: %i\n", i, elem->sent);
         if (!elem->sent) {
             printf("-> Sending %i\n",i);
             rel_DEBUG(&(elem->pkt.data[0]), ntohs(elem->pkt.len)-12);
