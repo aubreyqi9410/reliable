@@ -254,6 +254,7 @@ rel_output (rel_t *r)
             bq_insert_at(r->rec_bq, rec_seqno, &pkt);
             return;
         }
+        else if (buffspace == 0) return;
     }
 }
 
