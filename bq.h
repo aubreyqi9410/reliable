@@ -30,7 +30,7 @@
 
 typedef struct bq {
     void* element_buffer;
-    char* element_available;
+    char* element_buffered;
     int num_elements;
     int element_size;
     int head;
