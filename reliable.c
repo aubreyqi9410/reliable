@@ -226,12 +226,13 @@ rel_read (rel_t *r)
         /* Send window is [head of buffer queue, head of buffer queue + window size] */
 
         if (r->send_seqno < bq_get_head_seq(r->send_bq) + r->window) {
-            elem.time_sent = clock();
+            gettimeofday(&(elem.time_sent),NULL);
             elem.sent = 1;
             conn_sendpkt(r->c, &elem.pkt, 12 + len);
         }
         else {
-            elem.time_sent = 0; /* Time sent is 1970, so when there's free window, it'll be sent */
+            elem.time_sent.tv_sec = 0; /* Time sent is 1970, so when there's free window, it'll be sent */
+            elem.time_sent.tv_usec = 0;
             elem.sent = 0;
         }
 
