@@ -179,6 +179,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     if (n > 8) {
         printf("Got data %i\n", ntohl(pkt->seqno));
         bq_insert_at(r->rec_bq, ntohl(pkt->seqno), pkt);
+        rel_output(r);
     }
 }
 
@@ -241,6 +242,7 @@ rel_output (rel_t *r)
             /* Don't ack until we successfully output */
             rel_send_ack(r, pkt.seqno);
         }
+        /* Partial packet printing edge case */
         else if (bufspace > 0) {
             conn_output(r->c, pkt.data, bufspace);
             memcpy(&(pkt.data[0]), &(pkt.data[bufspace]), pkt.len - bufspace);
