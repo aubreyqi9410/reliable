@@ -239,9 +239,9 @@ rel_read (rel_t *r)
 
         r->send_seqno ++;
 
-        /* Read an EOF */
+        /* Buffered an EOF */
 
-        if (len == -1) return;
+        if (len == 0) return;
     }
 }
 
