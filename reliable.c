@@ -172,13 +172,17 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
     if (!rel_packet_valid(pkt,n)) return;
 
+    pkt->len = ntohs(pkt->len);
+    pkt->seqno = ntohl(pkt->seqno);
+    pkt->ackno = ntohl(pkt->ackno);
+
     /* Ack */
-    rel_recvack (r, ntohl(pkt->ackno));
+    rel_recvack (r, pkt->ackno);
 
     /* Data */
     if (n > 8) {
-        printf("Got data %i\n", ntohl(pkt->seqno));
-        bq_insert_at(r->rec_bq, ntohl(pkt->seqno), pkt);
+        printf("Got data %i\n", pkt->seqno);
+        bq_insert_at(r->rec_bq, pkt->seqno, pkt);
         rel_output(r);
     }
 }
