@@ -152,6 +152,7 @@ rel_demux (const struct config_common *cc,
 void
 rel_recvack (rel_t *r, int ackno)
 {
+    printf("Got ack %i\n",ackno);
     int i;
     for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
         if (bq_element_available(r->send_bq, i)) {
