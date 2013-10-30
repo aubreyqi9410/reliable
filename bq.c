@@ -28,7 +28,7 @@ bq_t* bq_new(int num_elements, int element_size)
     bq_t* bq = (bq_t*)malloc(sizeof(bq_t));
 
     bq->element_buffer = calloc(num_elements, element_size);
-    bq->element_available = calloc(num_elements, sizeof(int));
+    bq->element_buffered = calloc(num_elements, sizeof(int));
 
     bq->num_elements = num_elements;
     bq->element_size = element_size;
@@ -42,7 +42,7 @@ bq_t* bq_new(int num_elements, int element_size)
 int bq_destroy(bq_t* bq)
 {
     free(bq->element_buffer);
-    free(bq->element_available);
+    free(bq->element_buffered);
     free(bq);
     return 0;
 }
@@ -52,28 +52,19 @@ int bq_insert_at(bq_t* bq, int index, void* element)
     if (!bq_contains_index(bq, index)) return -1;
 
     memcpy(bq_get_element(bq, index), element, bq->element_size);
-    bq->element_available[bq_index_to_offset(bq, index)] = 1;
+    bq->element_buffered[bq_index_to_offset(bq, index)] = 1;
 
     return 0;
 }
 
-int bq_element_available(bq_t* bq, int index)
+int bq_element_buffered(bq_t* bq, int index)
 {
-    return bq->element_available[bq_index_to_offset(bq, index)];
+    return bq->element_buffered[bq_index_to_offset(bq, index)];
 }
 
 void *bq_get_element(bq_t* bq, int index)
 {
     return bq->element_buffer + (bq_index_to_offset(bq, index) * bq->element_size);
-}
-
-int bq_get_element_copy(bq_t* bq, int index, void* buf)
-{
-    if (!bq_contains_index(bq, index)) return -1;
-
-    memcpy(buf, bq_get_element(bq, index), bq->element_size);
-
-    return 0;
 }
 
 int bq_get_head_seq(bq_t* bq)
@@ -96,7 +87,7 @@ int bq_increase_head_seq_to(bq_t* bq, int index)
      */
     int i;
     for (i = bq->head_seq; i <= index; i++) {
-        bq->element_available[bq_index_to_offset(bq, i)] = 0;
+        bq->element_buffered[bq_index_to_offset(bq, i)] = 0;
     }
 
     bq->head_seq = index;

@@ -33,6 +33,9 @@ struct reliable_state {
   int send_seqno;
   bq_t *rec_bq;
 
+  int sent_eof;
+  int received_eof;
+
 };
 rel_t *rel_list;
 
@@ -82,6 +85,9 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
   r->send_seqno = 1;
   r->rec_bq = bq_new(cc->window, sizeof(packet_t));
   bq_increase_head_seq_to(r->rec_bq,1);
+
+  r->received_eof = 0;
+  r->sent_eof = 0;
 
   return r;
 }
@@ -153,8 +159,14 @@ void
 rel_recvack (rel_t *r, int ackno)
 {
     int i;
+
+    /* Scan from our queue head to ackno + window size */
+
     for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
-        if (bq_element_available(r->send_bq, i)) {
+
+        /* If we have a buffered element that hasn't been sent, send it */
+
+        if (bq_element_buffered(r->send_bq, i)) {
             send_bq_element_t *elem = bq_get_element(r->send_bq, i);
             if (!elem->sent) {
                 elem->time_sent = clock();
@@ -177,9 +189,11 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     pkt->ackno = ntohl(pkt->ackno);
 
     /* Ack */
+
     rel_recvack (r, pkt->ackno);
 
     /* Data */
+
     if (n > 8) {
         bq_insert_at(r->rec_bq, pkt->seqno, pkt);
         /* TODO-HACK: rlib isn't calling rel_output on its own */
@@ -193,11 +207,11 @@ rel_read (rel_t *r)
     send_bq_element_t elem;
 
     while (1) {
-        /* We shouldn't run out of send buffer space, but we don't want to crash */
-        if (r->send_seqno > bq_get_tail_seq(r->send_bq)) return;
+        assert(r->send_seqno < bq_get_tail_seq(r->send_bq));
+
+        /* Read data directly into our packet */
 
         int len = conn_input(r->c, &(elem.pkt.data[0]), 500);
-
         if (len == 0) return;
         if (len == -1) {
             len = 0; /* send an EOF */
@@ -205,10 +219,11 @@ rel_read (rel_t *r)
 
         elem.pkt.ackno = htonl(0); /* TODO */
         elem.pkt.seqno = htonl(r->send_seqno);
-
         elem.pkt.len = htons(12 + len);
         elem.pkt.cksum = 0;
         elem.pkt.cksum = cksum(&elem.pkt, 12 + len);
+
+        /* Send window is [head of buffer queue, head of buffer queue + window size] */
 
         if (r->send_seqno < bq_get_head_seq(r->send_bq) + r->window) {
             elem.time_sent = clock();
@@ -216,14 +231,13 @@ rel_read (rel_t *r)
             conn_sendpkt(r->c, &elem.pkt, 12 + len);
         }
         else {
+            elem.time_sent = 0; /* Time sent is 1970, so when there's free window, it'll be sent */
             elem.sent = 0;
         }
 
         bq_insert_at(r->send_bq, r->send_seqno, &elem);
 
         r->send_seqno ++;
-
-        if (len < 500) return;
     }
 }
 
@@ -231,26 +245,33 @@ void
 rel_output (rel_t *r)
 {
     while (1) {
-        int rec_seqno = bq_get_head_seq(r->rec_bq);
-        if (!bq_element_available(r->rec_bq, rec_seqno)) return;
 
-        packet_t pkt;
-        bq_get_element_copy(r->rec_bq, rec_seqno, &pkt);
+        /* Read from the head of the received packets buffer queue */
+
+        int rec_seqno = bq_get_head_seq(r->rec_bq);
+        if (!bq_element_buffered(r->rec_bq, rec_seqno)) return;
+        packet_t *pkt = bq_get_element(r->rec_bq, rec_seqno);
 
         int bufspace = conn_bufspace(r->c);
 
-        if (bufspace > pkt.len) {
-            conn_output(r->c, pkt.data, pkt.len-12);
+        /* Print the whole packet, then ack */
+
+        if (bufspace > pkt->len) {
+            conn_output(r->c, pkt->data, pkt->len-12);
             bq_increase_head_seq_to(r->rec_bq, rec_seqno + 1);
-            /* Don't ack until we successfully output */
-            rel_send_ack(r, pkt.seqno + 1);
+
+            rel_send_ack(r, pkt->seqno + 1);
         }
-        /* Partial packet printing edge case */
+
+        /* Edge case: only enough buffer to print part of the packet */
+
         else if (bufspace > 0) {
-            conn_output(r->c, pkt.data, bufspace);
-            memcpy(&(pkt.data[0]), &(pkt.data[bufspace]), pkt.len - bufspace);
-            pkt.len -= bufspace;
-            bq_insert_at(r->rec_bq, rec_seqno, &pkt);
+            conn_output(r->c, pkt->data, bufspace);
+
+            /* Shift the packet data over, removing what we've already printed */
+
+            memcpy(&(pkt.data[0]), &(pkt->data[bufspace]), pkt->len - bufspace);
+            pkt->len -= bufspace;
             return;
         }
         else if (bufspace == 0) return;
@@ -261,15 +282,22 @@ void
 rel_timer ()
 {
     /* Retransmit any packets that need to be retransmitted */
+
     rel_t *r = rel_list;
     while (r != NULL) {
         int i = 0;
+
+        /* Send window is [head of buffer queue, head of buffer queue + window size] */
+
         for (i = bq_get_head_seq(r->send_bq); i < bq_get_head_seq(r->send_bq) + r->window; i++) {
-            if (bq_element_available(r->send_bq, i)) {
+            if (bq_element_buffered(r->send_bq, i)) {
                 send_bq_element_t *elem = bq_get_element(r->send_bq, i);
 
+                /* Get milliseconds since packet was last sent.
+                 * Packets that haven't been sent have ms_diff = 40 yrs */
+
                 clock_t now = clock();
-                int ms_diff = (int)((((float)elem->time_sent - (float)now) / CLOCKS_PER_SEC) * 1000);
+                int ms_diff = (int)((((float)now - (float)elem->time_sent) / CLOCKS_PER_SEC) * 1000);
 
                 if (ms_diff > r->timeout) {
                     elem->time_sent = now;
@@ -279,5 +307,6 @@ rel_timer ()
             }
         }
         r = r->next;
+        break;
     }
 }
