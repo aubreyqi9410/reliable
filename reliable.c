@@ -241,7 +241,7 @@ rel_output (rel_t *r)
         int bufspace = conn_bufspace(r->c);
 
         if (bufspace > pkt.len) {
-            conn_output(r->c, pkt.data, pkt.len);
+            conn_output(r->c, pkt.data, pkt.len-12);
             bq_increase_head_seq_to(r->rec_bq, rec_seqno + 1);
             /* Don't ack until we successfully output */
             rel_send_ack(r, pkt.seqno);
