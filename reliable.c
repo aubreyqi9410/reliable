@@ -159,6 +159,7 @@ rel_recvack (rel_t *r, int ackno)
             if (!elem->sent) {
                 elem->time_sent = clock();
                 elem->sent = 1;
+                if (ntohs(elem->pkt.len) == 12) printf("Sending EOF\n");
                 conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
             }
         }
