@@ -155,14 +155,17 @@ rel_recvack (rel_t *r, int ackno)
     printf("Ack %i\n",ackno);
     int i;
     for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
-        send_bq_element_t *elem = bq_get_element(r->send_bq, i);
-        printf("- thinking of sending %i: sent %i\n", i, elem->sent);
-        if (!elem->sent) {
-            printf("-> Sending %i\n",i);
-            rel_DEBUG(&(elem->pkt.data[0]), ntohs(elem->pkt.len)-12);
-            elem->time_sent = clock();
-            elem->sent = 1;
-            conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
+        if (bq_element_available(r->send_bq, i)) {
+            send_bq_element_t *elem = bq_get_element(r->send_bq, i);
+            printf("- thinking of sending %i: sent %i\n", i, elem->sent);
+            if (!elem->sent) {
+                printf("-> Sending %i\n",i);
+                if (ntohs(elem->pkt.len) == 0) printf("EOF\n");
+                else rel_DEBUG(&(elem->pkt.data[0]), ntohs(elem->pkt.len)-12);
+                elem->time_sent = clock();
+                elem->sent = 1;
+                conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
+            }
         }
     }
 
