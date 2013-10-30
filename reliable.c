@@ -182,6 +182,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     /* Data */
     if (n > 8) {
         bq_insert_at(r->rec_bq, pkt->seqno, pkt);
+        /* TODO-HACK: rlib isn't calling rel_output on its own */
+        rel_output(r);
     }
 }
 
