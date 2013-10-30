@@ -207,7 +207,7 @@ rel_read (rel_t *r)
     send_bq_element_t elem;
 
     while (1) {
-        assert(r->send_seqno > bq_get_tail_seq(r->send_bq));
+        assert(r->send_seqno <= bq_get_tail_seq(r->send_bq));
 
         /* Read data directly into our packet */
 
