@@ -225,6 +225,7 @@ rel_read (rel_t *r)
 void
 rel_output (rel_t *r)
 {
+    printf("Output called\n");
     while (1) {
         int rec_seqno = bq_get_head_seq(r->rec_bq);
         if (!bq_element_available(r->rec_bq, rec_seqno)) return;
