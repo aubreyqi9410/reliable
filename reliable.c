@@ -152,7 +152,6 @@ rel_demux (const struct config_common *cc,
 void
 rel_recvack (rel_t *r, int ackno)
 {
-    printf("Got ack %i\n",ackno);
     int i;
     for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
         if (bq_element_available(r->send_bq, i)) {
@@ -160,7 +159,6 @@ rel_recvack (rel_t *r, int ackno)
             if (!elem->sent) {
                 elem->time_sent = clock();
                 elem->sent = 1;
-                if (ntohs(elem->pkt.len) == 12) printf("Sending EOF\n");
                 conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
             }
         }
@@ -179,6 +177,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
     /* Data */
     if (n > 8) {
+        printf("Got data %i\n", pkt->seqno);
         bq_insert_at(r->rec_bq, pkt->seqno, pkt);
     }
 }
