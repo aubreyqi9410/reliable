@@ -42,7 +42,7 @@ rel_t *rel_list;
 
 typedef struct send_bq_element {
     int sent;
-    clock_t time_sent;
+    struct timeval time_sent;
     packet_t pkt;
 } send_bq_element_t;
 
@@ -169,7 +169,7 @@ rel_recvack (rel_t *r, int ackno)
         if (bq_element_buffered(r->send_bq, i)) {
             send_bq_element_t *elem = bq_get_element(r->send_bq, i);
             if (!elem->sent) {
-                elem->time_sent = clock();
+                gettimeofday(&(elem->time_sent),NULL);
                 elem->sent = 1;
                 conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
             }
@@ -300,8 +300,9 @@ rel_timer ()
                 /* Get milliseconds since packet was last sent.
                  * Packets that haven't been sent have ms_diff = 40 yrs */
 
-                clock_t now = clock();
-                int ms_diff = (int)((((float)now - (float)elem->time_sent) / CLOCKS_PER_SEC) * 1000);
+                struct timeval now;
+                gettimeofday(&now, NULL);
+                int ms_diff = (int)((now.tv_sec - elem->time_sent.tv_sec)*1000) + (int)((now.tv_usec - elem->time_sent.tv_usec)/1000);
 
                 if (ms_diff > r->timeout) {
                     elem->time_sent = now;
