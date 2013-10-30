@@ -291,6 +291,9 @@ int listen_on (int dgram, struct sockaddr_storage *ss);
 /* Convenient way to get a socket connected to a destination */
 int connect_to (int dgram, const struct sockaddr_storage *ss);
 
+/* Convenient time comparison function */
+long need_timer_in (const struct timespec *last, long timer)
+
 #include <time.h>
 #include <sys/time.h>
 

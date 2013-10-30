@@ -169,8 +169,8 @@ rel_recvack (rel_t *r, int ackno)
         if (bq_element_buffered(r->send_bq, i)) {
             send_bq_element_t *elem = bq_get_element(r->send_bq, i);
             if (!elem->sent) {
-                gettimeofday(&(elem->time_sent),NULL);
                 elem->sent = 1;
+                clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
                 conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
             }
         }
@@ -226,7 +226,7 @@ rel_read (rel_t *r)
         /* Send window is [head of buffer queue, head of buffer queue + window size] */
 
         if (r->send_seqno < bq_get_head_seq(r->send_bq) + r->window) {
-            gettimeofday(&(elem.time_sent),NULL);
+            clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
             elem.sent = 1;
             conn_sendpkt(r->c, &elem.pkt, 12 + len);
         }
@@ -301,14 +301,10 @@ rel_timer ()
                 /* Get milliseconds since packet was last sent.
                  * Packets that haven't been sent have ms_diff = 40 yrs */
 
-                struct timeval now;
-                gettimeofday(&now, NULL);
-                int ms_diff = (int)((now.tv_sec - elem->time_sent.tv_sec)*1000) + (int)((now.tv_usec - elem->time_sent.tv_usec)/1000);
-
-                if (ms_diff > r->timeout) {
-                    elem->time_sent = now;
+                if (need_timer_in (&elem->time_sent, r->timeout) == 0) {
                     elem->sent = 1;
                     conn_sendpkt(r->c, &elem->pkt, ntohs(elem->pkt.len));
+                    clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
                 }
             }
         }
