@@ -187,7 +187,7 @@ rel_read (rel_t *r)
     send_bq_element_t elem;
 
     while (1) {
-        /* Double check we're not running out of buffer space */
+        /* We shouldn't run out of send buffer space, but we don't want to crash */
         if (r->send_seqno > bq_get_tail_seq(r->send_bq)) return;
 
         int len = conn_input(r->c, &(elem.pkt.data[0]), 500);
@@ -195,9 +195,7 @@ rel_read (rel_t *r)
         if (len == 0) return;
         if (len == -1) {
             len = 0; /* send an EOF */
-            printf("EOF\n");
         }
-        rel_DEBUG(&(elem.pkt.data[0]),len);
 
         elem.pkt.ackno = htonl(0); /* TODO */
         elem.pkt.seqno = htonl(r->send_seqno);
