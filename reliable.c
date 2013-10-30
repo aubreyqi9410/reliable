@@ -238,6 +238,10 @@ rel_read (rel_t *r)
         bq_insert_at(r->send_bq, r->send_seqno, &elem);
 
         r->send_seqno ++;
+
+        /* Read an EOF */
+
+        if (len == -1) return;
     }
 }
 
