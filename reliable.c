@@ -270,7 +270,7 @@ rel_output (rel_t *r)
 
             /* Shift the packet data over, removing what we've already printed */
 
-            memcpy(&(pkt.data[0]), &(pkt->data[bufspace]), pkt->len - bufspace);
+            memcpy(&(pkt->data[0]), &(pkt->data[bufspace]), pkt->len - bufspace);
             pkt->len -= bufspace;
             return;
         }
