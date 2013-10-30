@@ -177,8 +177,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
     /* Data */
     if (n > 8) {
-        printf("Got data %i\n", pkt->seqno);
-        bq_insert_at(r->rec_bq, pkt->seqno, pkt);
+        printf("Got data %i\n", ntohl(pkt->seqno));
+        bq_insert_at(r->rec_bq, ntohl(pkt->seqno), pkt);
     }
 }
 
