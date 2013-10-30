@@ -42,7 +42,7 @@ rel_t *rel_list;
 
 typedef struct send_bq_element {
     int sent;
-    struct timeval time_sent;
+    struct timespec time_sent;
     packet_t pkt;
 } send_bq_element_t;
 
@@ -226,13 +226,13 @@ rel_read (rel_t *r)
         /* Send window is [head of buffer queue, head of buffer queue + window size] */
 
         if (r->send_seqno < bq_get_head_seq(r->send_bq) + r->window) {
-            clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
+            clock_gettime (CLOCK_MONOTONIC, &(elem.time_sent));
             elem.sent = 1;
             conn_sendpkt(r->c, &elem.pkt, 12 + len);
         }
         else {
             elem.time_sent.tv_sec = 0; /* Time sent is 1970, so when there's free window, it'll be sent */
-            elem.time_sent.tv_usec = 0;
+            elem.time_sent.tv_nsec = 0;
             elem.sent = 0;
         }
 
@@ -301,9 +301,9 @@ rel_timer ()
                 /* Get milliseconds since packet was last sent.
                  * Packets that haven't been sent have ms_diff = 40 yrs */
 
-                if (need_timer_in (&elem->time_sent, r->timeout) == 0) {
+                if (need_timer_in (&(elem->time_sent), r->timeout) == 0) {
                     elem->sent = 1;
-                    conn_sendpkt(r->c, &elem->pkt, ntohs(elem->pkt.len));
+                    conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
                     clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
                 }
             }
