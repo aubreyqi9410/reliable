@@ -181,9 +181,7 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
     /* Data */
     if (n > 8) {
-        printf("Got data %i\n", pkt->seqno);
         bq_insert_at(r->rec_bq, pkt->seqno, pkt);
-        rel_output(r);
     }
 }
 
@@ -230,7 +228,6 @@ rel_read (rel_t *r)
 void
 rel_output (rel_t *r)
 {
-    printf("Output called\n");
     while (1) {
         int rec_seqno = bq_get_head_seq(r->rec_bq);
         if (!bq_element_available(r->rec_bq, rec_seqno)) return;
@@ -244,7 +241,6 @@ rel_output (rel_t *r)
             conn_output(r->c, pkt.data, pkt.len-12);
             bq_increase_head_seq_to(r->rec_bq, rec_seqno + 1);
             /* Don't ack until we successfully output */
-            printf("Sending ack %i\n", pkt.seqno+1);
             rel_send_ack(r, pkt.seqno + 1);
         }
         /* Partial packet printing edge case */
@@ -257,7 +253,6 @@ rel_output (rel_t *r)
         }
         else if (bufspace == 0) return;
     }
-    printf("Finished output\n");
 }
 
 void
