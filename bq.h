@@ -23,9 +23,9 @@
  * -----------                            |
  *  | 4 | mem index = 4 % 3 = 1 ----------|
  * -----------
- *  | 5 | inaccessible
+ *  | 5 | not yet accessible
  * -----------
- *  | 6 | inaccessible
+ *  | 6 | not yet accessible
  */
 
 typedef struct bq {
