@@ -310,6 +310,7 @@ rel_read (rel_t *r)
          * future. */
 
         bq_insert_at(r->send_bq, r->send_seqno, &elem);
+        printf("Buffered packet %i, len %i\n",r->send_seqno,len);
 
         /* Assert that this is the highest element we've inserted */
         
