@@ -29,12 +29,17 @@ struct reliable_state {
 
   int timeout;
   int window;
+
   bq_t *send_bq;
-  int send_seqno;
   bq_t *rec_bq;
 
+  int send_seqno;
+  int ackno;
+
   int sent_eof;
-  int received_eof;
+
+  int read_eof;
+  int printed_eof;
 
   int nagle;
 
@@ -90,14 +95,18 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   r->timeout = cc->timeout;
   r->window = cc->window;
+
   r->send_bq = bq_new(SEND_BUFFER_SIZE, sizeof(send_bq_element_t));
   bq_increase_head_seq_to(r->send_bq,1);
-  r->send_seqno = 1;
   r->rec_bq = bq_new(cc->window, sizeof(packet_t));
   bq_increase_head_seq_to(r->rec_bq,1);
 
-  r->received_eof = 0;
+  r->send_seqno = 1;
+  r->ackno = 1;
+
+  r->printed_eof = 0;
   r->sent_eof = 0;
+  r->read_eof = 0;
 
   return r;
 }
@@ -142,12 +151,22 @@ rel_packet_valid (packet_t *pkt, size_t n)
 void 
 rel_send_ack (rel_t *r, int ackno)
 {
+
+    /* Acks cannot regress */
+
+    assert(ackno >= r->ackno);
+    r->ackno = ackno;
+
+    /* Build the ack packet */
+
     packet_t ack_packet;
     ack_packet.ackno = htonl(ackno);
 
     ack_packet.len = htons(8);
     ack_packet.cksum = 0;
     ack_packet.cksum = cksum(&ack_packet, 8);
+
+    /* Send it off */
 
     conn_sendpkt (r->c, &ack_packet, 8);
 }
@@ -168,9 +187,19 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     elem->sent = 1;
     clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
 
+    /* Update to the current ack number */
+
+    elem->pkt.ackno = htons(r->ackno);
+
     /* Do the dirty deed */
 
     conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
+
+    /* Update our status if this was an EOF packet */
+    if (ntohs(elem->pkt.len) == 12) {
+        r->sent_eof = 1;
+    }
+
     return 1;
 }
 
@@ -208,7 +237,8 @@ rel_recvack (rel_t *r, int ackno)
     bq_increase_head_seq_to(r->send_bq, ackno);
 
     /* Assert that moving the head didn't mess with our buffered
-     * packets */
+     * packets. We shouldn't have buffered something beyond what
+     * we read in. */
 
     assert(!bq_element_buffered(r->send_bq,r->send_seqno));
 
@@ -285,6 +315,11 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
 void
 rel_read (rel_t *r)
 {
+
+    /* If we've read an EOF, no reason to even ge started */
+
+    if (r->read_eof) return;
+
     send_bq_element_t elem;
 
     while (1) {
@@ -310,7 +345,6 @@ rel_read (rel_t *r)
          * future. */
 
         bq_insert_at(r->send_bq, r->send_seqno, &elem);
-        printf("Buffered packet %i, len %i\n",r->send_seqno,len);
 
         /* Assert that this is the highest element we've inserted */
         
@@ -318,18 +352,27 @@ rel_read (rel_t *r)
 
         r->send_seqno ++;
 
-        /* If we buffered an EOF, then we're done with this read */
+        /* If we buffered an EOF, then we're done with reading */
 
-        if (len == 0) return;
+        if (len == 0) {
+            r->read_eof = 1;
+            return;
+        }
     }
 }
 
 void
 rel_output (rel_t *r)
 {
+
+    /* If we've already printed an EOF, then we're done. */
+
+    if (r->printed_eof) return;
+
     while (1) {
 
-        /* Read from the head of the received packets buffer queue */
+        /* Read from the head of the received packets buffer queue,
+         * if we have any received packets waiting */
 
         int rec_seqno = bq_get_head_seq(r->rec_bq);
         if (!bq_element_buffered(r->rec_bq, rec_seqno)) return;
@@ -339,11 +382,15 @@ rel_output (rel_t *r)
 
         /* Print the whole packet, then ack */
 
-        if (bufspace > pkt->len) {
+        if (bufspace > pkt->len-12) {
             conn_output(r->c, pkt->data, pkt->len-12);
             bq_increase_head_seq_to(r->rec_bq, rec_seqno + 1);
 
             rel_send_ack(r, pkt->seqno + 1);
+
+            /* If we just printed out an EOF, update our status */
+        
+            r->printed_eof = 1;
         }
 
         /* Edge case: only enough buffer to print part of the packet */
@@ -357,6 +404,9 @@ rel_output (rel_t *r)
             pkt->len -= bufspace;
             return;
         }
+
+        /* If we have no space left, time to quit */
+
         else if (bufspace == 0) return;
     }
 }
