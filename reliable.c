@@ -56,7 +56,6 @@ typedef struct send_bq_element {
 
 /* ABSTRACT TODOS:
  *
- * Resend dropped packets properly
  * Nagle - single outstanding small packet
  * Sent & Received EOF - connection teardown
  */
@@ -434,10 +433,8 @@ rel_timer ()
         /* Send window is [head of buffer queue, head of buffer queue + window size],
          * so we iterate over the send window, and send anything that's timed out. */
 
-        printf("Timer checking buffered packets (%i):\n", r->send_seqno);
         int i = 0;
         for (i = bq_get_head_seq(r->send_bq); i < bq_get_head_seq(r->send_bq) + r->window; i++) {
-            printf("%i : ",i);
 
             /* This is just a safety check, in case we haven't read in this part
              * of the send window yet */
@@ -448,7 +445,6 @@ rel_timer ()
              * been r->timeout ms since elem->time_sent */
 
             send_bq_element_t *elem = bq_get_element(r->send_bq, i);
-            printf("%li\n",need_timer_in (&(elem->time_sent), r->timeout));
             if (need_timer_in (&(elem->time_sent), r->timeout)) {
                 rel_send_buffered_pkt(r,elem);
             }
