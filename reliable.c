@@ -279,22 +279,24 @@ rel_recvack (rel_t *r, int ackno)
 
     bq_increase_head_seq_to(r->send_bq, ackno);
 
-    /* Check if this is an ack for a Nagle packet */
-
-    if (ackno > r->nagle_outstanding) {
-        r->nagle_outstanding = 0;
-    }
-
     /* Assert that moving the head didn't mess with our buffered
      * packets. We shouldn't have buffered something beyond what
      * we read in. */
 
     assert(!bq_element_buffered(r->send_bq,r->seqno));
 
+    /* Check if this is an ack for a Nagle packet */
+
+    if (ackno > r->nagle_outstanding) {
+        r->nagle_outstanding = 0;
+    }
+
     /* Send any buffered packets that are newly within the window */
 
+    printf("Got ack %i\nThinking about sending: ",ackno);
     int i;
     for (i = ackno; i < ackno + r->window; i++) {
+        printf("%i ",i);
 
         /* If we reach a point we haven't buffered in, we're done. */
 
@@ -307,6 +309,7 @@ rel_recvack (rel_t *r, int ackno)
             rel_send_buffered_pkt(r, elem);
         }
     }
+    printf("\n");
 }
 
 void
