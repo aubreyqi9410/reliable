@@ -306,7 +306,9 @@ rel_read (rel_t *r)
 
         bq_insert_at(r->send_bq, r->send_seqno, &elem);
 
-        printf("Buffered %i, len %i\n", r->send_seqno, len);
+        /* Assert that this is the highest element we've inserted */
+        
+        assert(!bq_element_buffered(r->send_bq, r->send_seqno + 1));
 
         r->send_seqno ++;
 
