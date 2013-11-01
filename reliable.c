@@ -48,6 +48,7 @@ typedef struct send_bq_element {
     packet_t pkt;
 } send_bq_element_t;
 
+
 /* ABSTRACT TODOS:
  *
  * Resend dropped packets properly
@@ -159,8 +160,8 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
 {
     assert(r);
     assert(elem);
-    assert(r->send_seqno < bq_get_head_seq(r->send_bq) + r->window);
-    assert(r->send_seqno > 0);
+    assert(ntohl(elem->pkt.seqno) < bq_get_head_seq(r->send_bq) + r->window);
+    assert(ntohl(elem->pkt.seqno) > 0);
 
     /* Update records associated with the packet */
 
