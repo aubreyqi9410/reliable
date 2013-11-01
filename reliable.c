@@ -200,13 +200,13 @@ rel_recvack (rel_t *r, int ackno)
     /* Shouldn't get acks for stuff we haven't sent,
      * or an ack that's lower than a previous ack */
 
-    assert(ackno < r->send_seqno + 1);
+    assert(ackno < bq_get_head_seq(r->send_bq) + r->window + 1);
     assert(ackno >= bq_get_head_seq(r->send_bq));
 
     /* Send any buffered packets that are newly within the window */
 
     int i;
-    for (i = bq_get_head_seq(r->send_bq); i < ackno; i++) {
+    for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
             rel_send_buffered_pkt(r, elem);
