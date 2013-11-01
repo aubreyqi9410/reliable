@@ -28,7 +28,9 @@ bq_t* bq_new(int num_elements, int element_size)
     bq_t* bq = (bq_t*)malloc(sizeof(bq_t));
 
     bq->element_buffer = calloc(num_elements, element_size);
+    assert(bq->element_buffer);
     bq->element_buffered = calloc(num_elements, sizeof(int));
+    assert(bq->element_buffered);
 
     bq->num_elements = num_elements;
     bq->element_size = element_size;
