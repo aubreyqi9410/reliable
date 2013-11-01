@@ -59,6 +59,8 @@ int bq_insert_at(bq_t* bq, int index, void* element)
 
 int bq_element_buffered(bq_t* bq, int index)
 {
+    if (!bq_contains_index(bq, index)) return 0;
+
     return bq->element_buffered[bq_index_to_offset(bq, index)];
 }
 
