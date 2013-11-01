@@ -203,19 +203,19 @@ rel_recvack (rel_t *r, int ackno)
     assert(ackno < bq_get_head_seq(r->send_bq) + r->window + 1);
     assert(ackno >= bq_get_head_seq(r->send_bq));
 
+    /* Move the head of the window to the ackno */
+
+    bq_increase_head_seq_to(r->send_bq, ackno);
+
     /* Send any buffered packets that are newly within the window */
 
     int i;
-    for (i = bq_get_head_seq(r->send_bq); i < ackno + r->window; i++) {
+    for (i = ackno; i < ackno + r->window; i++) {
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
             rel_send_buffered_pkt(r, elem);
         }
     }
-
-    /* Move the head of the window to the ackno */
-
-    bq_increase_head_seq_to(r->send_bq, ackno);
 }
 
 void
