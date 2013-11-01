@@ -86,7 +86,7 @@ int bq_increase_head_seq_to(bq_t* bq, int index)
      * now.
      */
     int i;
-    for (i = bq->head_seq; i <= index; i++) {
+    for (i = bq->head_seq; i < index; i++) {
         bq->element_buffered[bq_index_to_offset(bq, i)] = 0;
     }
 
