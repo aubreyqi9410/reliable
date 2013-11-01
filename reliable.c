@@ -365,7 +365,7 @@ rel_timer ()
         printf("Timer checking buffered packets:\n");
         int i = 0;
         for (i = bq_get_head_seq(r->send_bq); i < bq_get_head_seq(r->send_bq) + r->window; i++) {
-            printf("%i ",i);
+            printf("%i : ",i);
 
             /* This is just a safety check, in case we haven't read in this part
              * of the send window yet */
@@ -376,11 +376,10 @@ rel_timer ()
              * been r->timeout ms since elem->time_sent */
 
             send_bq_element_t *elem = bq_get_element(r->send_bq, i);
-            printf("%li : ",need_timer_in (&(elem->time_sent), r->timeout));
+            printf("%li\n",need_timer_in (&(elem->time_sent), r->timeout));
             if (need_timer_in (&(elem->time_sent), r->timeout)) {
                 rel_send_buffered_pkt(r,elem);
             }
         }
-        printf("\n");
     }
 }
