@@ -207,11 +207,10 @@ rel_recvack (rel_t *r, int ackno)
 
     bq_increase_head_seq_to(r->send_bq, ackno);
 
-    /* Assert that moving the head didn't funk with our buffered
+    /* Assert that moving the head didn't mess with our buffered
      * packets */
 
-    assert(bq_element_buffered(r->send_bq,r->send_seqno));
-    assert(!bq_element_buffered(r->send_bq,r->send_seqno+1));
+    assert(!bq_element_buffered(r->send_bq,r->send_seqno));
 
     /* Send any buffered packets that are newly within the window */
 
