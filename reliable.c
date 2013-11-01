@@ -191,6 +191,11 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
 
     elem->pkt.ackno = htons(r->ackno);
 
+    /* Recalculate the checksum, cause we changed the ackno */
+
+    elem->pkt.cksum = 0;
+    elem->pkt.cksum = cksum(&elem->pkt, ntohs(elem->pkt.len));
+
     /* Do the dirty deed */
 
     conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
