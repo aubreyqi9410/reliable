@@ -362,8 +362,10 @@ rel_timer ()
         /* Send window is [head of buffer queue, head of buffer queue + window size],
          * so we iterate over the send window, and send anything that's timed out. */
 
+        printf("Timer checking buffered packets:\n");
         int i = 0;
         for (i = bq_get_head_seq(r->send_bq); i < bq_get_head_seq(r->send_bq) + r->window; i++) {
+            printf("%i ",i);
 
             /* This is just a safety check, in case we haven't read in this part
              * of the send window yet */
@@ -378,5 +380,6 @@ rel_timer ()
                 rel_send_buffered_pkt(r,elem);
             }
         }
+        printf("\n");
     }
 }
