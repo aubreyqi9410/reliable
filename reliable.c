@@ -25,23 +25,30 @@ struct reliable_state {
 
   conn_t *c;			/* This is the connection object */
 
-  /* My additions */
+  /* Configurations */
 
   int timeout;
   int window;
 
+  /* Buffer queue for sending and receiving */
+
   bq_t *send_bq;
   bq_t *rec_bq;
 
-  int send_seqno;
+  /* State for sending and receiving */
+
+  int seqno;
   int ackno;
 
-  int sent_eof;
+  /* Connection teardown state */
 
+  int sent_eof;
   int read_eof;
   int printed_eof;
 
-  int nagle;
+  /* Nagle state */
+
+  int nagle_outstanding;
 
 };
 rel_t *rel_list;
@@ -57,7 +64,6 @@ typedef struct send_bq_element {
 /* ABSTRACT TODOS:
  *
  * Nagle - single outstanding small packet
- * Sent & Received EOF - connection teardown
  */
 
 
@@ -90,22 +96,33 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
     rel_list->prev = &r->next;
   rel_list = r;
 
-  /* My additions */
+  /* Save the configurations we'll need */
 
   r->timeout = cc->timeout;
   r->window = cc->window;
+
+  /* Create a buffer queue for sending and receiving, starting at
+   * index 1 */
 
   r->send_bq = bq_new(SEND_BUFFER_SIZE, sizeof(send_bq_element_t));
   bq_increase_head_seq_to(r->send_bq,1);
   r->rec_bq = bq_new(cc->window, sizeof(packet_t));
   bq_increase_head_seq_to(r->rec_bq,1);
 
-  r->send_seqno = 1;
+  /* Send an receive state */
+
+  r->seqno = 1;
   r->ackno = 1;
+
+  /* Connection teardown state */
 
   r->printed_eof = 0;
   r->sent_eof = 0;
   r->read_eof = 0;
+
+  /* Nagle state */
+
+  r->nagle_outstanding = 0;
 
   return r;
 }
@@ -181,6 +198,23 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     assert(ntohl(elem->pkt.seqno) < bq_get_head_seq(r->send_bq) + r->window);
     assert(ntohl(elem->pkt.seqno) > 0);
 
+    /* If this is a small packet, check Nagle conditions */
+
+    if (ntohs(elem->pkt.len) < 512) {
+
+        /* If there's another small packet unacknowledged, don't send */
+
+        if (r->nagle_outstanding) {
+            return 0;
+        }
+
+        /* Otherwise record that this our small packet oustanding */
+
+        else {
+            r->nagle_outstanding = ntohl(elem->pkt.seqno);
+        }
+    }
+
     /* Update records associated with the packet */
 
     elem->sent = 1;
@@ -240,11 +274,17 @@ rel_recvack (rel_t *r, int ackno)
 
     bq_increase_head_seq_to(r->send_bq, ackno);
 
+    /* Check if this is an ack for a Nagle packet */
+
+    if (ackno > r->nagle_outstanding) {
+        r->nagle_outstanding = 0;
+    }
+
     /* Assert that moving the head didn't mess with our buffered
      * packets. We shouldn't have buffered something beyond what
      * we read in. */
 
-    assert(!bq_element_buffered(r->send_bq,r->send_seqno));
+    assert(!bq_element_buffered(r->send_bq,r->seqno));
 
     /* Send any buffered packets that are newly within the window */
 
@@ -309,7 +349,7 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
     }
 
     elem->pkt.ackno = htonl(0); /* TODO */
-    elem->pkt.seqno = htonl(r->send_seqno);
+    elem->pkt.seqno = htonl(r->seqno);
     elem->pkt.len = htons(12 + len);
     elem->pkt.cksum = 0;
     elem->pkt.cksum = cksum(&elem->pkt, 12 + len);
@@ -337,7 +377,7 @@ rel_read (rel_t *r)
 
         /* Check for overrunning send buffer memory */
 
-        assert(r->send_seqno <= bq_get_tail_seq(r->send_bq));
+        assert(r->seqno <= bq_get_tail_seq(r->send_bq));
 
         /* Read up to 500 bytes into a packet, overwriting the old
          * contents of elem */
@@ -348,20 +388,20 @@ rel_read (rel_t *r)
         /* If this packet sequence number is within the window,
          * then send it */
 
-        if (r->send_seqno < bq_get_head_seq(r->send_bq) + r->window) {
+        if (r->seqno < bq_get_head_seq(r->send_bq) + r->window) {
             rel_send_buffered_pkt(r,&elem);
         }
 
         /* Record the packet in the queue, so that we can (re)send it in the 
          * future. */
 
-        bq_insert_at(r->send_bq, r->send_seqno, &elem);
+        bq_insert_at(r->send_bq, r->seqno, &elem);
 
         /* Assert that this is the highest element we've inserted */
         
-        assert(!bq_element_buffered(r->send_bq, r->send_seqno + 1));
+        assert(!bq_element_buffered(r->send_bq, r->seqno + 1));
 
-        r->send_seqno ++;
+        r->seqno ++;
 
         /* If we buffered an EOF, then we're done with reading */
 
