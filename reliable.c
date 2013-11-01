@@ -42,8 +42,10 @@ struct reliable_state {
 
   /* Connection teardown state */
 
-  int sent_eof;
   int read_eof;
+  int sent_eof;
+  int received_eof_ack;
+
   int printed_eof;
 
   /* Nagle state */
@@ -116,9 +118,11 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   /* Connection teardown state */
 
-  r->printed_eof = 0;
-  r->sent_eof = 0;
   r->read_eof = 0;
+  r->sent_eof = 0;
+  r->received_eof_ack = 0;
+
+  r->printed_eof = 0;
 
   /* Nagle state */
 
@@ -202,9 +206,9 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
 
     if (ntohs(elem->pkt.len) < 512) {
 
-        /* If there's another small packet unacknowledged, don't send */
+        /* If there's another small packet unacknowledged, don't send this one. */
 
-        if (r->nagle_outstanding) {
+        if (r->nagle_outstanding != ntohl(elem->pkt.seqno)) {
             return 0;
         }
 
@@ -222,7 +226,7 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
 
     /* Update to the current ack number */
 
-    elem->pkt.ackno = htons(r->ackno);
+    elem->pkt.ackno = htonl(r->ackno);
 
     /* Recalculate the checksum, cause we changed the ackno */
 
@@ -234,6 +238,7 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
 
     /* Update our status if this was an EOF packet */
+
     if (ntohs(elem->pkt.len) == 12) {
         r->sent_eof = 1;
     }
@@ -348,7 +353,9 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
-    elem->pkt.ackno = htonl(0); /* TODO */
+    /* Build packet frame data */
+
+    elem->pkt.ackno = htonl(r->ackno);
     elem->pkt.seqno = htonl(r->seqno);
     elem->pkt.len = htons(12 + len);
     elem->pkt.cksum = 0;
@@ -367,7 +374,7 @@ void
 rel_read (rel_t *r)
 {
 
-    /* If we've read an EOF, no reason to even ge started */
+    /* If we've read an EOF, no reason to even get started */
 
     if (r->read_eof) return;
 
@@ -456,7 +463,7 @@ rel_output (rel_t *r)
             return;
         }
 
-        /* If we have no space left, time to quit */
+        /* If we have no buffer space left, time to quit */
 
         else if (bufspace == 0) return;
     }
