@@ -293,10 +293,8 @@ rel_recvack (rel_t *r, int ackno)
 
     /* Send any buffered packets that are newly within the window */
 
-    printf("Got ack %i\nThinking about sending: ",ackno);
     int i;
     for (i = ackno; i < ackno + r->window; i++) {
-        printf("%i ",i);
 
         /* If we reach a point we haven't buffered in, we're done. */
 
@@ -309,7 +307,6 @@ rel_recvack (rel_t *r, int ackno)
             rel_send_buffered_pkt(r, elem);
         }
     }
-    printf("\n");
 }
 
 void
