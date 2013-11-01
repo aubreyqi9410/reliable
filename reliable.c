@@ -251,6 +251,13 @@ rel_recvack (rel_t *r, int ackno)
 
     int i;
     for (i = ackno; i < ackno + r->window; i++) {
+
+        /* If we reach a point we haven't buffered in, we're done. */
+
+        if (!bq_element_buffered(r->send_bq, i)) return;
+
+        /* Otherwise send out the packet, if noone has sent it yet. */
+
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
         if (!elem->sent) {
             rel_send_buffered_pkt(r, elem);
