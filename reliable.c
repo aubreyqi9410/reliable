@@ -401,7 +401,7 @@ rel_output (rel_t *r)
 
             /* If we just printed out an EOF, update our status */
         
-            r->printed_eof = 1;
+            if (pkt->len == 12) r->printed_eof = 1;
         }
 
         /* Edge case: only enough buffer to print part of the packet */
