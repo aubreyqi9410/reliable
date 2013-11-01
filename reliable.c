@@ -208,7 +208,7 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
 
         /* If there's another small packet unacknowledged, don't send this one. */
 
-        if (r->nagle_outstanding != ntohl(elem->pkt.seqno)) {
+        if (r->nagle_outstanding != 0 && r->nagle_outstanding != ntohl(elem->pkt.seqno)) {
             return 0;
         }
 
