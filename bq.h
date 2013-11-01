@@ -6,7 +6,8 @@
  * The queue holds entries from a head index (starts at 0) up to
  * head index + queue capacity. A user can advance the head index, 
  * clearing out entries below the head index, and making space for
- * more entries, without doing memmoves.
+ * more entries, without doing memmoves, so there aren't very many
+ * moving pieces (literally or figuratively).
  *
  * Internally, it's implemented using a modulo index into a block
  * of memory.

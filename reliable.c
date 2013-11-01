@@ -65,10 +65,22 @@ typedef struct send_bq_element {
 
 /* ABSTRACT TODOS:
  *
- * Nagle - single outstanding small packet
+ * Multiplexing incoming connections in server mode
  */
 
+/* PRIVATE FUNCTIONS:
+ *
+ * See implementations for notes.
+ */
 
+void rel_recvack (rel_t *r, int ackno);
+int rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem);
+void rel_send_ack (rel_t *r, int ackno);
+int rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem);
+void rel_ack_nagle (rel_t *r, int ackno);
+int rel_nagle_constrain_sending_buffered_pkt(rel_t *r, send_bq_element_t* elem);
+int rel_packet_valid (packet_t *pkt, size_t n);
+int rel_seqno_in_send_window(rel_t *r, int seqno);
 
 /* Creates a new reliable protocol session, returns NULL on failure.
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
@@ -145,107 +157,6 @@ rel_destroy (rel_t *r)
   bq_destroy(r->rec_bq);
 }
 
-void
-rel_DEBUG (char *c, size_t n)
-{
-    printf("\nDEBUG %i chars\n", (int)n);
-    int i;
-    for (i = 0; i < n; i++) {
-        printf("%c",c[i]);
-    }
-    printf("\n\n");
-}
-
-int 
-rel_packet_valid (packet_t *pkt, size_t n)
-{
-    if (ntohs(pkt->len) > n) return 0;
-    int cksum_buf = pkt->cksum;
-    pkt->cksum = 0;
-    if (cksum_buf != cksum(pkt, n)) return 0;
-    return 1;
-}
-
-/* Creates and sends an ack packet.
- */
-void 
-rel_send_ack (rel_t *r, int ackno)
-{
-
-    /* Acks cannot regress */
-
-    assert(ackno >= r->ackno);
-    r->ackno = ackno;
-
-    /* Build the ack packet */
-
-    packet_t ack_packet;
-    ack_packet.ackno = htonl(ackno);
-
-    ack_packet.len = htons(8);
-    ack_packet.cksum = 0;
-    ack_packet.cksum = cksum(&ack_packet, 8);
-
-    /* Send it off */
-
-    conn_sendpkt (r->c, &ack_packet, 8);
-}
-
-/* Sends a buffered packet, and handles updating the meta data
- * associated with the packet.
- */
-int 
-rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem) 
-{
-    assert(r);
-    assert(elem);
-    assert(ntohl(elem->pkt.seqno) < bq_get_head_seq(r->send_bq) + r->window);
-    assert(ntohl(elem->pkt.seqno) > 0);
-
-    /* If this is a small packet, check Nagle conditions */
-
-    if (ntohs(elem->pkt.len) < 512) {
-
-        /* If there's another small packet unacknowledged, don't send this one. */
-
-        if (r->nagle_outstanding != 0 && r->nagle_outstanding != ntohl(elem->pkt.seqno)) {
-            return 0;
-        }
-
-        /* Otherwise record that this our small packet oustanding */
-
-        else {
-            r->nagle_outstanding = ntohl(elem->pkt.seqno);
-        }
-    }
-
-    /* Update records associated with the packet */
-
-    elem->sent = 1;
-    clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
-
-    /* Update to the current ack number */
-
-    elem->pkt.ackno = htonl(r->ackno);
-
-    /* Recalculate the checksum, cause we changed the ackno */
-
-    elem->pkt.cksum = 0;
-    elem->pkt.cksum = cksum(&elem->pkt, ntohs(elem->pkt.len));
-
-    /* Do the dirty deed */
-
-    conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
-
-    /* Update our status if this was an EOF packet */
-
-    if (ntohs(elem->pkt.len) == 12) {
-        r->sent_eof = 1;
-    }
-
-    return 1;
-}
-
 /* This function only gets called when the process is running as a
  * server and must handle connections from multiple clients.  You have
  * to look up the rel_t structure based on the address in the
@@ -259,54 +170,6 @@ rel_demux (const struct config_common *cc,
 	   const struct sockaddr_storage *ss,
 	   packet_t *pkt, size_t len)
 {
-}
-
-/* This function gets called on every packet receipt, to handle the
- * ackno in the packet.
- */
-void
-rel_recvack (rel_t *r, int ackno)
-{
-    assert(r); 
-
-    /* Shouldn't get acks for stuff we haven't sent,
-     * or an ack that's lower than a previous ack */
-
-    assert(ackno < bq_get_head_seq(r->send_bq) + r->window + 1);
-    assert(ackno >= bq_get_head_seq(r->send_bq));
-
-    /* Move the head of the window to the ackno */
-
-    bq_increase_head_seq_to(r->send_bq, ackno);
-
-    /* Assert that moving the head didn't mess with our buffered
-     * packets. We shouldn't have buffered something beyond what
-     * we read in. */
-
-    assert(!bq_element_buffered(r->send_bq,r->seqno));
-
-    /* Check if this is an ack for a Nagle packet */
-
-    if (ackno > r->nagle_outstanding) {
-        r->nagle_outstanding = 0;
-    }
-
-    /* Send any buffered packets that are newly within the window */
-
-    int i;
-    for (i = ackno; i < ackno + r->window; i++) {
-
-        /* If we reach a point we haven't buffered in, we're done. */
-
-        if (!bq_element_buffered(r->send_bq, i)) return;
-
-        /* Otherwise send out the packet, if noone has sent it yet. */
-
-        send_bq_element_t *elem = bq_get_element(r->send_bq, i);
-        if (!elem->sent) {
-            rel_send_buffered_pkt(r, elem);
-        }
-    }
 }
 
 void
@@ -336,40 +199,6 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     }
 }
 
-/* Reads up to 500 bytes of data from conn_input() into the
- * packet passed in, writing everything in network byte order,
- * and sets metadata.
- */
-
-int
-rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
-{
-
-    /* Read data directly into our packet */
-
-    int len = conn_input(r->c, &(elem->pkt.data[0]), 500);
-    if (len == 0) return -1; /* no more data to read */
-    if (len == -1) {
-        len = 0; /* send an EOF */
-    }
-
-    /* Build packet frame data */
-
-    elem->pkt.ackno = htonl(r->ackno);
-    elem->pkt.seqno = htonl(r->seqno);
-    elem->pkt.len = htons(12 + len);
-    elem->pkt.cksum = 0;
-    elem->pkt.cksum = cksum(&elem->pkt, 12 + len);
-
-    /* Time sent is 1970, so when there's free window, it'll be sent */
-
-    elem->time_sent.tv_sec = 0;
-    elem->time_sent.tv_nsec = 0;
-    elem->sent = 0;
-
-    return len;
-}
-
 void
 rel_read (rel_t *r)
 {
@@ -395,7 +224,7 @@ rel_read (rel_t *r)
         /* If this packet sequence number is within the window,
          * then send it */
 
-        if (r->seqno < bq_get_head_seq(r->send_bq) + r->window) {
+        if (rel_seqno_in_send_window(r,r->seqno)) {
             rel_send_buffered_pkt(r,&elem);
         }
 
@@ -404,7 +233,7 @@ rel_read (rel_t *r)
 
         bq_insert_at(r->send_bq, r->seqno, &elem);
 
-        /* Assert that this is the highest element we've inserted */
+        /* Assert that this is the highest seqno element we've inserted */
         
         assert(!bq_element_buffered(r->send_bq, r->seqno + 1));
 
@@ -481,7 +310,7 @@ rel_timer ()
          * so we iterate over the send window, and send anything that's timed out. */
 
         int i = 0;
-        for (i = bq_get_head_seq(r->send_bq); i < bq_get_head_seq(r->send_bq) + r->window; i++) {
+        for (i = bq_get_head_seq(r->send_bq); rel_seqno_in_send_window(r,i); i++) {
 
             /* This is just a safety check, in case we haven't read in this part
              * of the send window yet */
@@ -497,4 +326,233 @@ rel_timer ()
             }
         }
     }
+}
+
+/**********************
+ * Helper function implementations
+ **********************/
+
+/* This function gets called on every packet receipt, to handle the
+ * ackno in the packet.
+ */
+
+void
+rel_recvack (rel_t *r, int ackno)
+{
+    assert(r); 
+
+    /* Shouldn't get acks for stuff we haven't sent,
+     * or an ack that's lower than a previous ack */
+
+    assert(ackno < bq_get_head_seq(r->send_bq) + r->window + 1);
+    assert(ackno >= bq_get_head_seq(r->send_bq));
+
+    /* Move the head of the window to the ackno */
+
+    bq_increase_head_seq_to(r->send_bq, ackno);
+
+    /* Assert that moving the head didn't mess with our buffered
+     * packets. We shouldn't have buffered something beyond what
+     * we read in. */
+
+    assert(!bq_element_buffered(r->send_bq,r->seqno));
+
+    /* Check if this is an ack for a Nagle packet */
+
+    rel_ack_nagle(r, ackno);
+
+    /* Send any buffered packets that are newly within the window */
+
+    int i;
+    for (i = ackno; i < ackno + r->window; i++) {
+
+        /* If we reach a point we haven't buffered in, we're done. */
+
+        if (!bq_element_buffered(r->send_bq, i)) return;
+
+        /* Otherwise send out the packet, if noone has sent it yet. */
+
+        send_bq_element_t *elem = bq_get_element(r->send_bq, i);
+        if (!elem->sent) {
+            rel_send_buffered_pkt(r, elem);
+        }
+    }
+}
+
+/* Sends a buffered packet, and handles updating the meta data
+ * associated with the packet.
+ */
+int 
+rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem) 
+{
+    assert(r);
+    assert(elem);
+    assert(ntohl(elem->pkt.seqno) < bq_get_head_seq(r->send_bq) + r->window);
+    assert(ntohl(elem->pkt.seqno) > 0);
+
+    /* If this is a small packet, check Nagle conditions */
+
+    if (rel_nagle_constrain_sending_buffered_pkt(r, elem)) return 0;
+
+    /* Update records associated with the packet */
+
+    elem->sent = 1;
+    clock_gettime (CLOCK_MONOTONIC, &elem->time_sent);
+
+    /* Update to the current ack number */
+
+    elem->pkt.ackno = htonl(r->ackno);
+
+    /* Recalculate the checksum, cause we changed the ackno */
+
+    elem->pkt.cksum = 0;
+    elem->pkt.cksum = cksum(&elem->pkt, ntohs(elem->pkt.len));
+
+    /* Do the dirty deed */
+
+    conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
+
+    /* Update our status if this was an EOF packet */
+
+    if (ntohs(elem->pkt.len) == 12) {
+        r->sent_eof = 1;
+    }
+
+    return 1;
+}
+
+/* Creates and sends an ack packet.
+ */
+void 
+rel_send_ack (rel_t *r, int ackno)
+{
+
+    /* Acks cannot regress */
+
+    assert(ackno >= r->ackno);
+    r->ackno = ackno;
+
+    /* Build the ack packet */
+
+    packet_t ack_packet;
+    ack_packet.ackno = htonl(ackno);
+
+    ack_packet.len = htons(8);
+    ack_packet.cksum = 0;
+    ack_packet.cksum = cksum(&ack_packet, 8);
+
+    /* Send it off */
+
+    conn_sendpkt (r->c, &ack_packet, 8);
+}
+
+/* Reads up to 500 bytes of data from conn_input() into the
+ * packet passed in, writing everything in network byte order,
+ * and sets metadata.
+ */
+
+int
+rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
+{
+
+    /* Read data directly into our packet */
+
+    int len = conn_input(r->c, &(elem->pkt.data[0]), 500);
+    if (len == 0) return -1; /* no more data to read */
+    if (len == -1) {
+        len = 0; /* send an EOF */
+    }
+
+    /* Build packet frame data */
+
+    elem->pkt.ackno = htonl(r->ackno);
+    elem->pkt.seqno = htonl(r->seqno);
+    elem->pkt.len = htons(12 + len);
+    elem->pkt.cksum = 0;
+    elem->pkt.cksum = cksum(&elem->pkt, 12 + len);
+
+    /* Time sent is 1970, so when there's free window, it'll be sent */
+
+    elem->time_sent.tv_sec = 0;
+    elem->time_sent.tv_nsec = 0;
+    elem->sent = 0;
+
+    return len;
+}
+
+/* This function gets called every ack to update the Nagle constraint, in
+ * case the ack means that the last undersized data packet has left the network. */
+
+void
+rel_ack_nagle (rel_t *r, int ackno) 
+{
+    if (ackno > r->nagle_outstanding) {
+        r->nagle_outstanding = 0;
+    }
+}
+
+/* This function is called on every packet send. If the packet is undersize, and there
+ * is another small packets in the network, it returns 1 to indicate that this packet
+ * should not be sent at this time. Otherwise, it returns 0 to indicate that it's ok to
+ * send this packet. Handles noting outstanding small packets internally. */
+
+int
+rel_nagle_constrain_sending_buffered_pkt(rel_t *r, send_bq_element_t* elem)
+{
+    if (ntohs(elem->pkt.len) < 512) {
+
+        /* If there's another small packet unacknowledged, don't send this one. */
+
+        if (r->nagle_outstanding != 0 && r->nagle_outstanding != ntohl(elem->pkt.seqno)) {
+            return 1;
+        }
+
+        /* Otherwise record that this our small packet oustanding */
+
+        else {
+            r->nagle_outstanding = ntohl(elem->pkt.seqno);
+            return 0;
+        }
+    }
+
+    /* If it's a full size packet, no restrictions apply */
+
+    return 0;
+}
+
+/* Checks whether a packet has been corrupted, either by cksum or because the length is shorter
+ * than advertised. Returns 1 if packet is ok, and 0 otherwise.
+ */
+
+int 
+rel_packet_valid (packet_t *pkt, size_t n)
+{
+    if (ntohs(pkt->len) > n) return 0;
+    int cksum_buf = pkt->cksum;
+    pkt->cksum = 0;
+    if (cksum_buf != cksum(pkt, n)) return 0;
+    return 1;
+}
+
+/* Returns whether or not a seqno is within the current send window */
+
+int
+rel_seqno_in_send_window(rel_t *r, int seqno) 
+{
+    int head_seq = bq_get_head_seq(r->send_bq);
+    return (seqno >= head_seq) && (seqno < head_seq + r->window);
+}
+
+/* Quick function to debug a certain number of characters, good for printing
+ * packet bodies */
+
+void
+rel_DEBUG (char *c, size_t n)
+{
+    printf("\nDEBUG %i chars\n", (int)n);
+    int i;
+    for (i = 0; i < n; i++) {
+        printf("%c",c[i]);
+    }
+    printf("\n\n");
 }
