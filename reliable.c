@@ -257,7 +257,7 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
     /* Read data directly into our packet */
 
     int len = conn_input(r->c, &(elem->pkt.data[0]), 500);
-    if (len == 0) return -1; /* encountered error */
+    if (len == 0) return -1; /* no more data to read */
     if (len == -1) {
         len = 0; /* send an EOF */
     }
@@ -292,7 +292,7 @@ rel_read (rel_t *r)
          * contents of elem */
 
         int len = rel_read_input_into_packet(r, &elem);
-        if (len == -1) return; /* encountered error */
+        if (len == -1) return; /* no more data to read */
 
         /* If this packet sequence number is within the window,
          * then send it */
@@ -305,6 +305,8 @@ rel_read (rel_t *r)
          * future. */
 
         bq_insert_at(r->send_bq, r->send_seqno, &elem);
+
+        printf("Buffered %i, len %i\n", r->send_seqno, len);
 
         r->send_seqno ++;
 
