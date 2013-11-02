@@ -584,7 +584,7 @@ int
 rel_packet_valid (packet_t *pkt, size_t n)
 {
     if (ntohs(pkt->len) > n) {
-        printf("Rejecting packet because length shorter than advertised %i < %i\n",n,ntohs(pkt->len));
+        printf("Rejecting packet because length shorter than advertised %i < %i\n",(int)n,ntohs(pkt->len));
         return 0;
     }
     int cksum_buf = pkt->cksum;
