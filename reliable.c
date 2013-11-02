@@ -25,10 +25,15 @@ struct reliable_state {
 
   conn_t *c;			/* This is the connection object */
 
+  /* Sock addr storage */
+
+  const struct sockaddr_storage *ss;
+
   /* Configurations */
 
   int timeout;
   int window;
+  int single_connection;
 
   /* Buffer queue for sending and receiving */
 
@@ -77,6 +82,7 @@ void rel_recvack (rel_t *r, int ackno);
 int rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem);
 void rel_send_ack (rel_t *r, int ackno);
 int rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem);
+void rel_check_finished (rel_t *r_chk);
 void rel_ack_nagle (rel_t *r, int ackno);
 int rel_nagle_constrain_sending_buffered_pkt(rel_t *r, send_bq_element_t* elem);
 int rel_packet_valid (packet_t *pkt, size_t n);
@@ -110,10 +116,15 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
     rel_list->prev = &r->next;
   rel_list = r;
 
+  /* Set the sockaddr_storage for this connection */
+
+  r->ss = ss;
+
   /* Save the configurations we'll need */
 
   r->timeout = cc->timeout;
   r->window = cc->window;
+  r->single_connection = cc->single_connection;
 
   /* Create a buffer queue for sending and receiving, starting at
    * index 1 */
@@ -155,6 +166,8 @@ rel_destroy (rel_t *r)
 
   bq_destroy(r->send_bq);
   bq_destroy(r->rec_bq);
+
+  free(r);
 }
 
 /* This function only gets called when the process is running as a
@@ -170,6 +183,31 @@ rel_demux (const struct config_common *cc,
 	   const struct sockaddr_storage *ss,
 	   packet_t *pkt, size_t len)
 {
+    rel_t *r;
+    for (r = rel_list; r != NULL; r = r->next) {
+        if (addreq(ss, r->ss)) {
+            rel_recvpkt(r, pkt, len);
+            return;
+        }
+    }
+    
+    /* Before we create a new rel_t, we need to check
+     * that this packet has a seqno == 1, otherwise
+     * we're starting a flow part way in, and that's 
+     * against the rules. */
+
+    if (ntohl(pkt->seqno) != 1) {
+        printf("Received illegal sequence number to start flow.\n");
+        return;
+    }
+
+    /* If we reach here, then we need a new rel
+     * for this connection, so we add it at the
+     * head of the linked list of rel_t objects. */
+
+    rel_t *new_r = rel_create (NULL, ss, cc);
+    new_r->next = rel_list;
+    rel_list = new_r;
 }
 
 void
@@ -277,7 +315,10 @@ rel_output (rel_t *r)
 
             /* If we just printed out an EOF, update our status */
         
-            if (pkt->len == 12) r->printed_eof = 1;
+            if (pkt->len == 12) {
+                r->printed_eof = 1;
+                rel_check_finished(r);
+            }
         }
 
         /* Edge case: only enough buffer to print part of the packet */
@@ -416,6 +457,7 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
 
     if (ntohs(elem->pkt.len) == 12) {
         r->sent_eof = 1;
+        rel_check_finished(r);
     }
 
     return 1;
@@ -478,6 +520,14 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
     elem->sent = 0;
 
     return len;
+}
+
+void
+rel_check_finished (rel_t *r_chk)
+{
+    if (r_chk->sent_eof && r_chk->printed_eof) {
+        rel_destroy(r_chk);
+    }
 }
 
 /* This function gets called every ack to update the Nagle constraint, in
