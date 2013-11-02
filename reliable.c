@@ -183,6 +183,7 @@ rel_demux (const struct config_common *cc,
 	   const struct sockaddr_storage *ss,
 	   packet_t *pkt, size_t len)
 {
+    printf("Demuxing packet\n");
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
         if (addreq(ss, r->ss)) {
@@ -197,7 +198,7 @@ rel_demux (const struct config_common *cc,
      * against the rules. */
 
     if (ntohl(pkt->seqno) != 1) {
-        printf("Received illegal sequence number to start flow.\n");
+        printf("Received illegal sequence number to start flow %i.\n", ntohl(pkt->seqno));
         return;
     }
 
@@ -208,6 +209,8 @@ rel_demux (const struct config_common *cc,
     rel_t *new_r = rel_create (NULL, ss, cc);
     new_r->next = rel_list;
     rel_list = new_r;
+
+    rel_recvpkt(new_r, pkt, len);
 }
 
 void
