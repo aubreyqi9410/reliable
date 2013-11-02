@@ -187,6 +187,7 @@ rel_demux (const struct config_common *cc,
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
         if (addreq(ss, r->ss)) {
+            printf("Found existing rel_t to process packet\n");
             rel_recvpkt(r, pkt, len);
             return;
         }
@@ -209,6 +210,8 @@ rel_demux (const struct config_common *cc,
     rel_t *new_r = rel_create (NULL, ss, cc);
     new_r->next = rel_list;
     rel_list = new_r;
+
+    printf("Created new rel_t to process packet\n");
 
     rel_recvpkt(new_r, pkt, len);
 }
