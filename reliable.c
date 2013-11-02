@@ -27,7 +27,7 @@ struct reliable_state {
 
   /* Sock addr storage */
 
-  const struct sockaddr_storage ss;
+  struct sockaddr_storage ss;
 
   /* Configurations */
 
@@ -118,7 +118,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   /* Set the sockaddr_storage for this connection */
 
-  memcpy(&(r->ss),ss,sizeof(struct sockaddr_storage));
+  memcpy(&r->ss,ss,sizeof(struct sockaddr_storage));
 
   /* Save the configurations we'll need */
 
@@ -186,7 +186,7 @@ rel_demux (const struct config_common *cc,
     printf("Demuxing packet\n");
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
-        if (addreq(ss, r->ss)) {
+        if (addreq(ss, &r->ss)) {
             printf("Found existing rel_t to process packet\n");
             rel_recvpkt(r, pkt, len);
             return;
