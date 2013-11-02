@@ -27,7 +27,7 @@ struct reliable_state {
 
   /* Sock addr storage */
 
-  const struct sockaddr_storage *ss;
+  const struct sockaddr_storage ss;
 
   /* Configurations */
 
@@ -118,7 +118,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   /* Set the sockaddr_storage for this connection */
 
-  r->ss = ss;
+  memcpy(r->ss,ss,sizeof(struct sockaddr_storage));
 
   /* Save the configurations we'll need */
 
