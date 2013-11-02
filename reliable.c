@@ -207,12 +207,9 @@ rel_demux (const struct config_common *cc,
      * for this connection, so we add it at the
      * head of the linked list of rel_t objects. */
 
-    rel_t *new_r = rel_create (NULL, ss, cc);
-    new_r->next = rel_list;
-    rel_list = new_r;
-
     printf("Created new rel_t to process packet\n");
 
+    rel_t *new_r = rel_create (NULL, ss, cc);
     rel_recvpkt(new_r, pkt, len);
 }
 
