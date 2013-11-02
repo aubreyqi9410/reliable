@@ -67,15 +67,9 @@ typedef struct send_bq_element {
     packet_t pkt;
 } send_bq_element_t;
 
-
-/* ABSTRACT TODOS:
- *
- * Multiplexing incoming connections in server mode
- */
-
 /* PRIVATE FUNCTIONS:
  *
- * See implementations for notes.
+ * See implementations for comments about functionality.
  */
 
 void rel_recvack (rel_t *r, int ackno);
