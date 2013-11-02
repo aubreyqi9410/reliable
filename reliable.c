@@ -118,7 +118,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
   /* Set the sockaddr_storage for this connection */
 
-  memcpy((void*)r->ss,(void*)ss,sizeof(struct sockaddr_storage));
+  memcpy(&(r->ss),ss,sizeof(struct sockaddr_storage));
 
   /* Save the configurations we'll need */
 
