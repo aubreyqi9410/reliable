@@ -244,6 +244,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
     if (n > 8) {
         bq_insert_at(r->rec_bq, pkt->seqno, pkt);
+
+        /* Print try to print the output */
+
+        rel_output(r);
     }
 }
 
