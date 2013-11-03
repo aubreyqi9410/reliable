@@ -578,6 +578,12 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
+    /* TEMP: read "EOF" as an EOF */
+
+    if (strncmp(elem->pkt.data,"EOF",3) == 0) {
+        len = 0; /* send an EOF */
+    }
+
     /* Build packet frame data */
 
     elem->pkt.ackno = htonl(r->ackno);
