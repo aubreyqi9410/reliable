@@ -340,7 +340,8 @@ rel_read (rel_t *r)
 /* Called whenever there is free buffer space to write output. Handles
  * ack'ing packets after they are written to the terminal, or writing
  * parts of packets when there isn't enough buffer space to fit the whole
- * thing on the terminal. Returns 1 if atleast one ack was sent.
+ * thing on the terminal. Returns 1 if at least one new ack was sent, 0
+ * otherwise.
  */
 
 int
@@ -354,7 +355,7 @@ rel_output (rel_t *r)
 
     /* If we've already printed an EOF, then we're done. */
 
-    if (r->printed_eof) return;
+    if (r->printed_eof) return sent_ack;
 
     while (1) {
 
@@ -362,7 +363,7 @@ rel_output (rel_t *r)
          * if we have any received packets waiting */
 
         int rec_seqno = bq_get_head_seq(r->rec_bq);
-        if (!bq_element_buffered(r->rec_bq, rec_seqno)) return;
+        if (!bq_element_buffered(r->rec_bq, rec_seqno)) return sent_ack;
         packet_t *pkt = bq_get_element(r->rec_bq, rec_seqno);
 
         int bufspace = conn_bufspace(r->c);
@@ -393,12 +394,12 @@ rel_output (rel_t *r)
 
             memcpy(&(pkt->data[0]), &(pkt->data[bufspace]), pkt->len - bufspace);
             pkt->len -= bufspace;
-            return;
+            return sent_ack;
         }
 
         /* If we have no buffer space left, time to quit */
 
-        else if (bufspace == 0) return;
+        else if (bufspace == 0) return sent_ack;
     }
 
     assert(!pthread_mutex_unlock(&r->recursive_mutex));
