@@ -374,15 +374,15 @@ rel_output (rel_t *r)
 
             memcpy(&(pkt->data[0]), &(pkt->data[bufspace]), pkt->len - bufspace);
             pkt->len -= bufspace;
-            return 0;
+            break;
         }
 
         /* If we have no buffer space left, time to quit */
 
-        else if (bufspace == 0) return 0;
+        else if (bufspace == 0) break;
     }
 
-    rel_send_ack(r, sent_ack);
+    if (sent_ack != 0) rel_send_ack(r, sent_ack);
 
     return sent_ack;
 }
