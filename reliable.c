@@ -382,7 +382,7 @@ rel_output (rel_t *r)
         else if (bufspace == 0) return 0;
     }
 
-    rel_send_ack(r, send_ack);
+    rel_send_ack(r, sent_ack);
 
     return sent_ack;
 }
