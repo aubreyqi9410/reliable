@@ -332,7 +332,7 @@ rel_output (rel_t *r)
 
     /* If we've already printed an EOF, then we're done. */
 
-    if (r->printed_eof) return sent_ack;
+    if (r->printed_eof) return 0;
 
     while (1) {
 
@@ -340,7 +340,7 @@ rel_output (rel_t *r)
          * if we have any received packets waiting */
 
         int rec_seqno = bq_get_head_seq(r->rec_bq);
-        if (!bq_element_buffered(r->rec_bq, rec_seqno)) return sent_ack;
+        if (!bq_element_buffered(r->rec_bq, rec_seqno)) return 0;
         packet_t *pkt = bq_get_element(r->rec_bq, rec_seqno);
 
         int bufspace = conn_bufspace(r->c);
@@ -351,8 +351,7 @@ rel_output (rel_t *r)
             conn_output(r->c, pkt->data, pkt->len-12);
             bq_increase_head_seq_to(r->rec_bq, rec_seqno + 1);
 
-            rel_send_ack(r, pkt->seqno + 1);
-            sent_ack = 1;
+            sent_ack = pkt->seqno + 1;
 
             /* If we just printed out an EOF, update our status */
         
@@ -375,13 +374,15 @@ rel_output (rel_t *r)
 
             memcpy(&(pkt->data[0]), &(pkt->data[bufspace]), pkt->len - bufspace);
             pkt->len -= bufspace;
-            return sent_ack;
+            return 0;
         }
 
         /* If we have no buffer space left, time to quit */
 
-        else if (bufspace == 0) return sent_ack;
+        else if (bufspace == 0) return 0;
     }
+
+    rel_send_ack(r, send_ack);
 
     return sent_ack;
 }

@@ -13,13 +13,17 @@ Receiving:
 Illustration:
 
                       |-------------
-                    1 | Received, printed, ack'd deleted from memory
+                    1 | (unreachable) printed
                       |-------------
-  ackno ->          2 | Received, half printed, not ack'd
+           ackno -> 2 | (bq head) Received, half printed, not ack'd
                       |-------------
                     3 | Received, not printed, not ack'd
                       |-------------
                     4 | Not yet received
+                      |-------------
+                    5 | (bq tail) Not yet received
+                      |-------------
+                    6 | (unreachable) Out of window
                       |-------------
 
 With a queue abstraction I don't need to explicitly know which packets are within my receive window, because my buffer queue will just drop packets that I attempt to insert out of bounds. Reading packets out in order also isn't a problem, because I simply read the head of queue when it's available, and ack after I read. This means head-of-line blocking (and hence self-clocking) is implicit in the design, and doesn't need an explicit mechanism. I discuss acks in the next section.
@@ -31,39 +35,40 @@ Sending:
 Illustration:
 
                       |-------------
-                    1 | Sent, ack'd, deleted from memory
+                    1 | (unreachable) ack'd
                       |-------------
-  ackno ->          2 | Sent, not ack'd
+           ackno -> 2 | (bq head) Sent, not ack'd
                       |-------------
                     3 | Sent, not ack'd
                       |-------------
   ackno + window -> 3 | Sent, not ack'd
                       |-------------
-                    5 | Read, not sent
+extra send buffer-> 5 | (bq tail) Read, not sent
                       |-------------
-                    6 | Not yet read
+                    6 | (unreachable) out of buffer space
                       |-------------
 
 My send queue holds structs that contain packets with meta data about the last time they were sent. When I receive an ack, I move the head of the send queue up to the ackno, because I'll never need the packets below ackno again. That way I can cleanly reclaim memory without using system calls, by just readjusting a pointer and book-keeping about which slots have valid contents. It also means that all packets within |window size| of my send buffer's head are fair game to be sent across
 the network, and are checked by rel_timer.
 
 ---------------
-Demux:
----------------
-
-I just keep a sockaddr_storage in all my rel_t's (in server mode), and whenever I receive a new packet, I walk the linked list of rel_t's until I find a matching sockaddr_storage. If I don't find one, I allocate a new rel_t.
-
----------------
 Connection Teardown:
 ---------------
 
-I keep state about having written and sent an EOF. Once I've done both, I rel_destroy the offending rel_t.
+I keep state about having written an EOF to output (which implies receiving an EOF and priting all available packets) and whether I've read an EOF from input. Every time either of these values change, or I receive an ack, I check if both these conditions are true and I have acks for all outstanding packets. If all conditions are met, I rel_destroy the offending rel_t. This is executed aggressively on receiving an ack, so if an ack causes all conditions to be met, even if I could send
+more packets, I kill the rel_t instead.
 
 ---------------
 TCP Nagle:
 ---------------
 
 I keep state about the seqno of an outstanding packet that is smaller than full size. If that value is non-zero, I don't send any packets with a different seqno that are smaller than full size. If I receive an ack where ackno > nagle_seqno, then nagle_seqno = 0. I don't bother coalescing small packets together, because I'd rather the system works slowly and simply than is efficient and complicated.
+
+---------------
+Demux:
+---------------
+
+I just keep a sockaddr_storage in all my rel_t's (in server mode), and whenever I receive a new packet, I walk the linked list of rel_t's until I find a matching sockaddr_storage. If I don't find one, I allocate a new rel_t.
 
 ---------------
 Buffering concerns with my implementation:
