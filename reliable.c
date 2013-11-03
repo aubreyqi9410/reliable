@@ -264,9 +264,15 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     if (n > 8) {
         bq_insert_at(r->rec_bq, pkt->seqno, pkt);
 
-        /* Print try to print the output */
+        /* Print try to print the output. If this returns
+         * 0, it means that no new ack could be sent, so
+         * we should send a duplicate ack, just in case the
+         * last one was lost (even though it serves no congestion
+         * control purpose in this lab). */
 
-        rel_output(r);
+        if (!rel_output(r)) {
+            rel_send_ack(r, r->ackno);
+        }
     }
 
     assert(!pthread_mutex_unlock(&r->recursive_mutex));
@@ -334,15 +340,17 @@ rel_read (rel_t *r)
 /* Called whenever there is free buffer space to write output. Handles
  * ack'ing packets after they are written to the terminal, or writing
  * parts of packets when there isn't enough buffer space to fit the whole
- * thing on the terminal.
+ * thing on the terminal. Returns 1 if atleast one ack was sent.
  */
 
-void
+int
 rel_output (rel_t *r)
 {
     assert(r);
     
     assert(!pthread_mutex_lock(&r->recursive_mutex));
+
+    int sent_ack = 0;
 
     /* If we've already printed an EOF, then we're done. */
 
@@ -366,6 +374,7 @@ rel_output (rel_t *r)
             bq_increase_head_seq_to(r->rec_bq, rec_seqno + 1);
 
             rel_send_ack(r, pkt->seqno + 1);
+            sent_ack = 1;
 
             /* If we just printed out an EOF, update our status */
         
@@ -393,6 +402,8 @@ rel_output (rel_t *r)
     }
 
     assert(!pthread_mutex_unlock(&r->recursive_mutex));
+
+    return sent_ack;
 }
 
 /* Called periodically. Checks every outstanding packet that hasn't yet been ack'd,
