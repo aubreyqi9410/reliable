@@ -16,7 +16,7 @@
 #include "rlib.h"
 #include "bq.h"
 
-#define SEND_BUFFER_SIZE 1
+#define SEND_BUFFER_INITIAL_SIZE 1
 
 
 struct reliable_state {
@@ -124,7 +124,7 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
     /* Create a buffer queue for sending and receiving, starting at
     * index 1 */
 
-    r->send_bq = bq_new(SEND_BUFFER_SIZE, sizeof(send_bq_element_t));
+    r->send_bq = bq_new(SEND_BUFFER_INITIAL_SIZE, sizeof(send_bq_element_t));
     bq_increase_head_seq_to(r->send_bq,1);
     r->rec_bq = bq_new(cc->window, sizeof(packet_t));
     bq_increase_head_seq_to(r->rec_bq,1);
@@ -281,9 +281,9 @@ rel_read (rel_t *r)
 
         if (r->seqno > bq_get_tail_seq(r->send_bq)) {
 
-            /* Double our buffer size */
+            /* Double our buffer size, to prevent overflow if we're
+             * reading a really large file in. */
 
-            printf("Doubling buffer size\n");
             bq_double_size(r->send_bq);
         }
 

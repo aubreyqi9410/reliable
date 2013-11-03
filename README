@@ -17,7 +17,7 @@ so that they can be ack'd.
 Receiving:
 ---------------
 
-Illustration:
+Illustration of the queue:
 
                       |-------------
                     1 | (unreachable) printed
@@ -45,7 +45,7 @@ in the next section.
 Sending:
 ---------------
 
-Illustration:
+Illustration of the queue:
 
                       |-------------
                     1 | (unreachable) ack'd
@@ -99,18 +99,3 @@ Demux:
 I just keep a sockaddr_storage in all my rel_t's (in server mode), and whenever
 I receive a new packet, I walk the linked list of rel_t's until I find a
 matching sockaddr_storage. If I don't find one, I allocate a new rel_t.
-
---------------- 
-Buffering concerns with my implementation: 
----------------
-
-Since rel_read expects that you read the entire input buffer every time it is
-called, I have to buffer all input in memory until I receive acks for it. I
-allocate SEND_BUFFER_SIZE (defined in reliable.c) packets of buffer for read in,
-un-ack'd packets. That means that if a very large file is piped into my reliable
-transport, it will crash, because it will overrun the send bq's allocated space
-before I get a chance to free space by receiving acks. I chose not to handle
-realloc inside of bq, because I wanted the system to be as simple as possible,
-for the beauty of it. If buffer overrun is a problem during testing, reliable.c
-can be recompiled with a larger SEND_BUFFER_SIZE. I submitted a version with 
-10000 packets (500 kbytes) of buffer space.
