@@ -8,10 +8,13 @@ indexing into a fixed chunk of memory. For more detailed information (and some
 ascii art), see "bq.h".
 
 Armed with the abstractions provided by "bq.[c|h]", I've implemented
-sliding-window (and hence stop-and-wait) with two buffer queues: -the first
-buffer is for packets read in, and either waiting to be sent or waiting to be
-ack'd.  -the second buffer is for packets receivied, and waiting to be printed,
-so that they can be ack'd.
+sliding-window (and hence stop-and-wait) with two buffer queues: 
+
+ - the first buffer is for packets read in, and either waiting to be sent or 
+waiting to be ack'd.  
+
+ - the second buffer is for packets receivied, and waiting to be printed, so that 
+they can be ack'd.
 
 ---------------
 Receiving:
@@ -67,7 +70,10 @@ to the ackno, because I'll never need the packets below ackno again. That way I
 can cleanly reclaim memory without using system calls, by just readjusting a
 pointer and book-keeping about which slots have valid contents. It also means
 that all packets within |window size| of my send buffer's head are fair game to
-be sent across the network, and are checked by rel_timer.
+be sent across the network, and are checked by rel_timer. If the queue ever
+fills all the way up, I double the size of the buffer, so as long as you have
+memory in the system, you should be able to pipe a very large file across the
+network without issue.
 
 --------------- 
 Connection Teardown: 
