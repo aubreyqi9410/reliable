@@ -313,6 +313,9 @@ rel_read (rel_t *r)
 
         r->seqno ++;
 
+        /* Read an EOF, quit */
+
+        if (len == 0) return;
     }
 }
 
