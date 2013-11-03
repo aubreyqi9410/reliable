@@ -16,46 +16,46 @@
 #include "rlib.h"
 #include "bq.h"
 
-#define SEND_BUFFER_SIZE 500
+#define SEND_BUFFER_SIZE 10000
 
 
 struct reliable_state {
-  rel_t *next;			/* Linked list for traversing all connections */
-  rel_t **prev;
+    rel_t *next;	/* Linked list for traversing all connections */
+    rel_t **prev;
 
-  conn_t *c;			/* This is the connection object */
+    conn_t *c;		/* This is the connection object */
 
-  /* Sock addr storage */
+    /* Sock addr storage */
 
-  struct sockaddr_storage ss;
+    struct sockaddr_storage ss;
 
-  /* Configurations */
+    /* Configurations */
 
-  int timeout;
-  int window;
-  int single_connection;
+    int timeout;
+    int window;
+    int single_connection;
 
-  /* Buffer queue for sending and receiving */
+    /* Buffer queue for sending and receiving */
 
-  bq_t *send_bq;
-  bq_t *rec_bq;
+    bq_t *send_bq;
+    bq_t *rec_bq;
 
-  /* State for sending and receiving */
+    /* State for sending and receiving */
 
-  int seqno;
-  int ackno;
+    int seqno;
+    int ackno;
 
-  /* Connection teardown state */
+    /* Connection teardown state */
 
-  int read_eof;
-  int sent_eof;
-  int received_eof_ack;
+    int read_eof;
+    int sent_eof;
+    int received_eof_ack;
 
-  int printed_eof;
+    int printed_eof;
 
-  /* Nagle state */
+    /* Nagle state */
 
-  int nagle_outstanding;
+    int nagle_outstanding;
 
 };
 rel_t *rel_list;
@@ -69,7 +69,7 @@ typedef struct send_bq_element {
 
 /* PRIVATE FUNCTIONS:
  *
- * See implementations for comments about functionality.
+ * See implementations for comments.
  */
 
 void rel_recvack (rel_t *r, int ackno);
@@ -86,82 +86,90 @@ int rel_seqno_in_send_window(rel_t *r, int seqno);
  * Exactly one of c and ss should be NULL.  (ss is NULL when called
  * from rlib.c, while c is NULL when this function is called from
  * rel_demux.) */
+
 rel_t *
 rel_create (conn_t *c, const struct sockaddr_storage *ss,
 	    const struct config_common *cc)
 {
-  rel_t *r;
+    assert((c != NULL && ss == NULL) || (c == NULL && ss != NULL));
+    assert(cc);
 
-  r = xmalloc (sizeof (*r));
-  memset (r, 0, sizeof (*r));
+    rel_t *r;
 
-  if (!c) {
-    c = conn_create (r, ss);
+    r = xmalloc (sizeof (*r));
+    memset (r, 0, sizeof (*r));
+
     if (!c) {
-      free (r);
-      return NULL;
+        c = conn_create (r, ss);
+        if (!c) {
+            free (r);
+            return NULL;
+        }
     }
-  }
 
-  r->c = c;
-  r->next = rel_list;
-  r->prev = &rel_list;
-  if (rel_list)
-    rel_list->prev = &r->next;
-  rel_list = r;
+    r->c = c;
+    r->next = rel_list;
+    r->prev = &rel_list;
+    if (rel_list)
+        rel_list->prev = &r->next;
+    rel_list = r;
 
-  /* Set the sockaddr_storage for this connection */
+    /* Set the sockaddr_storage for this connection */
 
-  memcpy(&r->ss,ss,sizeof(struct sockaddr_storage));
+    memcpy(&r->ss,ss,sizeof(struct sockaddr_storage));
 
-  /* Save the configurations we'll need */
+    /* Save the configurations we'll need */
 
-  r->timeout = cc->timeout;
-  r->window = cc->window;
-  r->single_connection = cc->single_connection;
+    r->timeout = cc->timeout;
+    r->window = cc->window;
+    r->single_connection = cc->single_connection;
 
-  /* Create a buffer queue for sending and receiving, starting at
-   * index 1 */
+    /* Create a buffer queue for sending and receiving, starting at
+    * index 1 */
 
-  r->send_bq = bq_new(SEND_BUFFER_SIZE, sizeof(send_bq_element_t));
-  bq_increase_head_seq_to(r->send_bq,1);
-  r->rec_bq = bq_new(cc->window, sizeof(packet_t));
-  bq_increase_head_seq_to(r->rec_bq,1);
+    r->send_bq = bq_new(SEND_BUFFER_SIZE, sizeof(send_bq_element_t));
+    bq_increase_head_seq_to(r->send_bq,1);
+    r->rec_bq = bq_new(cc->window, sizeof(packet_t));
+    bq_increase_head_seq_to(r->rec_bq,1);
 
-  /* Send an receive state */
+    /* Send an receive state */
 
-  r->seqno = 1;
-  r->ackno = 1;
+    r->seqno = 1;
+    r->ackno = 1;
 
-  /* Connection teardown state */
+    /* Connection teardown state */
 
-  r->read_eof = 0;
-  r->sent_eof = 0;
-  r->received_eof_ack = 0;
+    r->read_eof = 0;
+    r->sent_eof = 0;
+    r->received_eof_ack = 0;
 
-  r->printed_eof = 0;
+    r->printed_eof = 0;
 
-  /* Nagle state */
+    /* Nagle state */
 
-  r->nagle_outstanding = 0;
+    r->nagle_outstanding = 0;
 
-  return r;
+    return r;
 }
+
+/* Destroys a rel_t, freeing associated queues, and managing the linked
+ * list.
+ */
 
 void
 rel_destroy (rel_t *r)
 {
-  if (r->next)
-    r->next->prev = r->prev;
-  *r->prev = r->next;
-  conn_destroy (r->c);
+    assert(r);
 
-  /* My additions */
+    if (r->next)
+        r->next->prev = r->prev;
+    *r->prev = r->next;
+    conn_destroy (r->c);
 
-  bq_destroy(r->send_bq);
-  bq_destroy(r->rec_bq);
+    /* Free the buffer queues */
 
-  free(r);
+    bq_destroy(r->send_bq);
+    bq_destroy(r->rec_bq);
 }
 
 /* This function only gets called when the process is running as a
@@ -172,16 +180,20 @@ rel_destroy (rel_t *r)
  * ().  (Pass rel_create NULL for the conn_t, so it will know to
  * allocate a new connection.)
  */
+
 void
 rel_demux (const struct config_common *cc,
 	   const struct sockaddr_storage *ss,
 	   packet_t *pkt, size_t len)
 {
-    printf("Demuxing packet\n");
+    assert(cc);
+    assert(ss);
+    assert(pkt);
+    assert(len >= 0);
+
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
         if (addreq(ss, &r->ss)) {
-            printf("Found existing rel_t to process packet\n");
             rel_recvpkt(r, pkt, len);
             return;
         }
@@ -193,23 +205,28 @@ rel_demux (const struct config_common *cc,
      * against the rules. */
 
     if (ntohl(pkt->seqno) != 1) {
-        printf("Received illegal sequence number to start flow %i.\n", ntohl(pkt->seqno));
         return;
     }
 
-    /* If we reach here, then we need a new rel
+    /* If we reach here, then we need a new rel_t
      * for this connection, so we add it at the
      * head of the linked list of rel_t objects. */
-
-    printf("Created new rel_t to process packet\n");
 
     rel_t *new_r = rel_create (NULL, ss, cc);
     rel_recvpkt(new_r, pkt, len);
 }
 
+/* Called on the receipt of each packet, after its been mapped to
+ * a rel_t.
+ */
+
 void
 rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 {
+    assert(r);
+    assert(pkt);
+    assert(n >= 0);
+
     if (!rel_packet_valid(pkt,n)) return;
 
     /* Do all the endinannness in one place */
@@ -227,16 +244,18 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
     if (n > 8) {
         bq_insert_at(r->rec_bq, pkt->seqno, pkt);
-
-        /* TODO-HACK: rlib isn't calling rel_output on its own */
-
-        rel_output(r);
     }
 }
+
+/* Called whenever there is new content to read from the buffer. Reads
+ * input into packets. Sends any packets that are within the send 
+ * window, buffers the rest to be sent later.
+ */
 
 void
 rel_read (rel_t *r)
 {
+    assert(r);
 
     /* If we've read an EOF, no reason to even get started */
 
@@ -283,9 +302,16 @@ rel_read (rel_t *r)
     }
 }
 
+/* Called whenever there is free buffer space to write output. Handles
+ * ack'ing packets after they are written to the terminal, or writing
+ * parts of packets when there isn't enough buffer space to fit the whole
+ * thing on the terminal.
+ */
+
 void
 rel_output (rel_t *r)
 {
+    assert(r);
 
     /* If we've already printed an EOF, then we're done. */
 
@@ -336,6 +362,11 @@ rel_output (rel_t *r)
     }
 }
 
+/* Called periodically. Checks every outstanding packet that hasn't yet been ack'd,
+ * and if the timeout period expired, then it re-sends the packet and updates the
+ * meta-data about last time sent.
+ */
+
 void
 rel_timer ()
 {
@@ -366,12 +397,15 @@ rel_timer ()
     }
 }
 
-/**********************
- * Helper function implementations
- **********************/
+/***********************************
+ * Helper function implementations *
+ ***********************************/
 
 /* This function gets called on every packet receipt, to handle the
- * ackno in the packet.
+ * ackno in the packet. It moves the buffer queue's head index (see
+ * bq.h for more details) to free up the space used by packets that
+ * have been ack'd. It also sends any buffered packets that are newly
+ * within the window, and haven't yet been sent.
  */
 
 void
@@ -418,8 +452,10 @@ rel_recvack (rel_t *r, int ackno)
 }
 
 /* Sends a buffered packet, and handles updating the meta data
- * associated with the packet.
+ * associated with the packet. Will also put in the latest ackno
+ * as a piggyback for the packet, and recalculate the cksum.
  */
+
 int 
 rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem) 
 {
@@ -460,15 +496,16 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     return 1;
 }
 
-/* Creates and sends an ack packet.
+/* Creates and sends an ack packet. This doesn't effect the
+ * Nagle constraint, because it's not a data packet.
  */
+
 void 
 rel_send_ack (rel_t *r, int ackno)
 {
+    assert(r);
+    assert(ackno >= r->ackno); /* Acks cannot regress */
 
-    /* Acks cannot regress */
-
-    assert(ackno >= r->ackno);
     r->ackno = ackno;
 
     /* Build the ack packet */
@@ -487,12 +524,15 @@ rel_send_ack (rel_t *r, int ackno)
 
 /* Reads up to 500 bytes of data from conn_input() into the
  * packet passed in, writing everything in network byte order,
- * and sets metadata.
+ * and sets metadata so that the packet will be sent at the
+ * next available opportunity.
  */
 
 int
 rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
 {
+    assert(r);
+    assert(elem);
 
     /* Read data directly into our packet */
 
@@ -519,33 +559,53 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
     return len;
 }
 
+/* Checks if a rel_t has both received and sent an EOF, and if
+ * it has, then it calls rel_destroy on the rel_t.
+ */
+
 void
 rel_check_finished (rel_t *r_chk)
 {
+    assert(r_chk);
+
     if (r_chk->sent_eof && r_chk->printed_eof) {
         rel_destroy(r_chk);
     }
 }
 
-/* This function gets called every ack to update the Nagle constraint, in
- * case the ack means that the last undersized data packet has left the network. */
+/* This function gets called every ack to update the Nagle 
+ * constraint, in case the ack means that the last undersized 
+ * data packet has left the network, which would mean that 
+ * it's safe to send more data.
+ */
 
 void
 rel_ack_nagle (rel_t *r, int ackno) 
 {
+    assert(r);
+    assert(ackno > 0);
+
     if (ackno > r->nagle_outstanding) {
         r->nagle_outstanding = 0;
     }
 }
 
-/* This function is called on every packet send. If the packet is undersize, and there
- * is another small packets in the network, it returns 1 to indicate that this packet
- * should not be sent at this time. Otherwise, it returns 0 to indicate that it's ok to
- * send this packet. Handles noting outstanding small packets internally. */
+/* This function is called on every packet send. If the packet 
+ * is undersize, and there is another small packets in the 
+ * network, it returns 1 to indicate that this packet should 
+ * not be sent at this time. Otherwise, it returns 0 to indicate 
+ * that it's ok to send this packet. Handles noting outstanding 
+ * small packets internally. rel_ack_nagle will release the
+ * constraint, if it receives an ack >= to the seqno of the
+ * outstanding Nagle packet.
+ */
 
 int
 rel_nagle_constrain_sending_buffered_pkt(rel_t *r, send_bq_element_t* elem)
 {
+    assert(r);
+    assert(elem);
+
     if (ntohs(elem->pkt.len) < 512) {
 
         /* If there's another small packet unacknowledged, don't send this one. */
@@ -554,7 +614,7 @@ rel_nagle_constrain_sending_buffered_pkt(rel_t *r, send_bq_element_t* elem)
             return 1;
         }
 
-        /* Otherwise record that this our small packet oustanding */
+        /* Otherwise record that this our small packet oustanding, but still send it */
 
         else {
             r->nagle_outstanding = ntohl(elem->pkt.seqno);
@@ -567,45 +627,41 @@ rel_nagle_constrain_sending_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     return 0;
 }
 
-/* Checks whether a packet has been corrupted, either by cksum or because the length is shorter
- * than advertised. Returns 1 if packet is ok, and 0 otherwise.
+/* Checks whether a packet has been corrupted, either by cksum or 
+ * because the length is shorter than advertised. Returns 1 if packet 
+ * is ok, and 0 otherwise.
  */
 
 int 
 rel_packet_valid (packet_t *pkt, size_t n)
 {
-    if (ntohs(pkt->len) > n) {
-        printf("Rejecting packet because length shorter than advertised %i < %i\n",(int)n,ntohs(pkt->len));
-        return 0;
-    }
+    assert(pkt);
+    assert(n >= 0);
+
+    /* Reject for received length shorter than pkt claims */
+
+    if (ntohs(pkt->len) > n) return 0;
+
+    /* Reject for incorrect cksum */
+
     int cksum_buf = pkt->cksum;
     pkt->cksum = 0;
-    if (cksum_buf != cksum(pkt, n)) {
-        printf("Rejecting packet with invalid cksum %x\n",cksum_buf);
-        return 0;
-    }
+    if (cksum_buf != cksum(pkt, n)) return 0;
+
+    /* Otherwise accept */
+
     return 1;
 }
 
-/* Returns whether or not a seqno is within the current send window */
+/* Returns whether or not a seqno is within the current send window
+ */
 
 int
 rel_seqno_in_send_window(rel_t *r, int seqno) 
 {
+    assert(r);
+    assert(seqno >= 0);
+
     int head_seq = bq_get_head_seq(r->send_bq);
     return (seqno >= head_seq) && (seqno < head_seq + r->window);
-}
-
-/* Quick function to debug a certain number of characters, good for printing
- * packet bodies */
-
-void
-rel_DEBUG (char *c, size_t n)
-{
-    printf("\nDEBUG %i chars\n", (int)n);
-    int i;
-    for (i = 0; i < n; i++) {
-        printf("%c",c[i]);
-    }
-    printf("\n\n");
 }
