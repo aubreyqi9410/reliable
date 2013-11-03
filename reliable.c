@@ -244,6 +244,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     assert(pkt);
     assert(n >= 0);
 
+    assert(!pthread_mutex_lock(&r->recursive_mutex));
+
     if (!rel_packet_valid(pkt,n)) return;
 
     /* Do all the endinannness in one place */
@@ -266,6 +268,8 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
 
         rel_output(r);
     }
+
+    assert(!pthread_mutex_unlock(&r->recursive_mutex));
 }
 
 /* Called whenever there is new content to read from the buffer. Reads
@@ -277,6 +281,8 @@ void
 rel_read (rel_t *r)
 {
     assert(r);
+    
+    assert(!pthread_mutex_lock(&r->recursive_mutex));
 
     /* If we've read an EOF, no reason to even get started */
 
@@ -321,6 +327,8 @@ rel_read (rel_t *r)
             return;
         }
     }
+
+    assert(!pthread_mutex_unlock(&r->recursive_mutex));
 }
 
 /* Called whenever there is free buffer space to write output. Handles
@@ -333,6 +341,8 @@ void
 rel_output (rel_t *r)
 {
     assert(r);
+    
+    assert(!pthread_mutex_lock(&r->recursive_mutex));
 
     /* If we've already printed an EOF, then we're done. */
 
@@ -381,6 +391,8 @@ rel_output (rel_t *r)
 
         else if (bufspace == 0) return;
     }
+
+    assert(!pthread_mutex_unlock(&r->recursive_mutex));
 }
 
 /* Called periodically. Checks every outstanding packet that hasn't yet been ack'd,
@@ -395,6 +407,8 @@ rel_timer ()
 
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
+    
+        assert(!pthread_mutex_lock(&r->recursive_mutex));
 
         /* Send window is [head of buffer queue, head of buffer queue + window size],
          * so we iterate over the send window, and send anything that's timed out. */
@@ -415,6 +429,8 @@ rel_timer ()
                 rel_send_buffered_pkt(r,elem);
             }
         }
+
+        assert(!pthread_mutex_unlock(&r->recursive_mutex));
     }
 }
 
