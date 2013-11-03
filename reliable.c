@@ -340,7 +340,7 @@ rel_output (rel_t *r)
          * if we have any received packets waiting */
 
         int rec_seqno = bq_get_head_seq(r->rec_bq);
-        if (!bq_element_buffered(r->rec_bq, rec_seqno)) return 0;
+        if (!bq_element_buffered(r->rec_bq, rec_seqno)) break;
         packet_t *pkt = bq_get_element(r->rec_bq, rec_seqno);
 
         int bufspace = conn_bufspace(r->c);
