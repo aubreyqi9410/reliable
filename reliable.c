@@ -315,7 +315,10 @@ rel_read (rel_t *r)
 
         /* Read an EOF, quit */
 
-        if (len == 0) return;
+        if (len == 0) {
+            r->read_eof = 1;
+            return;
+        }
     }
 }
 
