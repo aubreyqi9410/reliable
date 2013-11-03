@@ -425,7 +425,7 @@ rel_timer ()
              * been r->timeout ms since elem->time_sent */
 
             send_bq_element_t *elem = bq_get_element(r->send_bq, i);
-            if (need_timer_in (&(elem->time_sent), r->timeout*10) == 0) {
+            if (need_timer_in (&(elem->time_sent), r->timeout) == 0) {
                 rel_send_buffered_pkt(r,elem);
             }
         }
