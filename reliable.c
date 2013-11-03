@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
+#include <pthread.h>
 
 #include "rlib.h"
 #include "bq.h"
@@ -57,6 +58,11 @@ struct reliable_state {
 
     int nagle_outstanding;
 
+    /* Recursive mutex for any actions this rel_t does,
+     * because none of the stuff is thread-safe. */
+
+    pthread_mutex_t recursive_mutex;
+    pthread_mutexattr_t recursive_mutex_attr;
 };
 rel_t *rel_list;
 
@@ -149,6 +155,12 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
 
     r->nagle_outstanding = 0;
 
+    /* Initialize the mutex */
+
+    pthread_mutexattr_init(&r->recursive_mutex_attr);
+    pthread_mutexattr_settype(&r->recursive_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&r->recursive_mutex, &r->recursive_mutex_attr);
+
     return r;
 }
 
@@ -170,6 +182,11 @@ rel_destroy (rel_t *r)
 
     bq_destroy(r->send_bq);
     bq_destroy(r->rec_bq);
+
+    /* Destroy the mutex */
+
+    pthread_mutex_destroy(&r->recursive_mutex);
+    pthread_mutexattr_destroy(&r->recursive_mutex_attr);
 }
 
 /* This function only gets called when the process is running as a
