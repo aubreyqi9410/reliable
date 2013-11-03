@@ -63,7 +63,7 @@ I keep state about having written and sent an EOF. Once I've done both, I rel_de
 TCP Nagle:
 ---------------
 
-I keep state about the seqno of an outstanding packet that is smaller than full size. If that value is non-zero, I don't send any packets with a different seqno that are smaller than full size. If I receive an ack where ackno > nagle_seqno, then nagle_seqno = 0.
+I keep state about the seqno of an outstanding packet that is smaller than full size. If that value is non-zero, I don't send any packets with a different seqno that are smaller than full size. If I receive an ack where ackno > nagle_seqno, then nagle_seqno = 0. I don't bother coalescing small packets together, because I'd rather the system works slowly and simply than is efficient and complicated.
 
 ---------------
 Buffering concerns with my implementation:

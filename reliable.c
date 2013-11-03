@@ -12,7 +12,6 @@
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
-#include <pthread.h>
 
 #include "rlib.h"
 #include "bq.h"
@@ -49,20 +48,12 @@ struct reliable_state {
     /* Connection teardown state */
 
     int read_eof;
-    int sent_eof;
-    int received_eof_ack;
 
     int printed_eof;
 
     /* Nagle state */
 
     int nagle_outstanding;
-
-    /* Recursive mutex for any actions this rel_t does,
-     * because none of the stuff is thread-safe. */
-
-    pthread_mutex_t recursive_mutex;
-    pthread_mutexattr_t recursive_mutex_attr;
 };
 rel_t *rel_list;
 
@@ -78,12 +69,12 @@ typedef struct send_bq_element {
  * See implementations for comments.
  */
 
-void rel_recvack (rel_t *r, int ackno);
+int rel_recv_ack (rel_t *r, int ackno);
 int rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem);
 void rel_send_ack (rel_t *r, int ackno);
 int rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem);
-void rel_check_finished (rel_t *r_chk);
-void rel_ack_nagle (rel_t *r, int ackno);
+int rel_check_finished (rel_t *r);
+void rel_ack_check_nagle (rel_t *r, int ackno);
 int rel_nagle_constrain_sending_buffered_pkt(rel_t *r, send_bq_element_t* elem);
 int rel_packet_valid (packet_t *pkt, size_t n);
 int rel_seqno_in_send_window(rel_t *r, int seqno);
@@ -146,20 +137,11 @@ rel_create (conn_t *c, const struct sockaddr_storage *ss,
     /* Connection teardown state */
 
     r->read_eof = 0;
-    r->sent_eof = 0;
-    r->received_eof_ack = 0;
-
     r->printed_eof = 0;
 
     /* Nagle state */
 
     r->nagle_outstanding = 0;
-
-    /* Initialize the mutex */
-
-    pthread_mutexattr_init(&r->recursive_mutex_attr);
-    pthread_mutexattr_settype(&r->recursive_mutex_attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&r->recursive_mutex, &r->recursive_mutex_attr);
 
     return r;
 }
@@ -182,11 +164,6 @@ rel_destroy (rel_t *r)
 
     bq_destroy(r->send_bq);
     bq_destroy(r->rec_bq);
-
-    /* Destroy the mutex */
-
-    pthread_mutex_destroy(&r->recursive_mutex);
-    pthread_mutexattr_destroy(&r->recursive_mutex_attr);
 }
 
 /* This function only gets called when the process is running as a
@@ -244,8 +221,6 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     assert(pkt);
     assert(n >= 0);
 
-    assert(!pthread_mutex_lock(&r->recursive_mutex));
-
     if (!rel_packet_valid(pkt,n)) return;
 
     /* Do all the endinannness in one place */
@@ -254,9 +229,17 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     pkt->seqno = ntohl(pkt->seqno);
     pkt->ackno = ntohl(pkt->ackno);
 
-    /* Read ack nums on all packets */
+    /* Read ack nums on all packets, regardless of data or
+     * ack. */
 
-    rel_recvack (r, pkt->ackno);
+    if (rel_recv_ack (r, pkt->ackno)) {
+
+        /* A return of 1 means that that ack was enough for
+         * us to close the connection, so our rel_t has been
+         * destroyed. Time to quit. */
+
+        return;
+    }
 
     /* Insert all data packets into the read buffer for
      * when we get some space for output. */
@@ -274,8 +257,6 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
             rel_send_ack(r, r->ackno);
         }
     }
-
-    assert(!pthread_mutex_unlock(&r->recursive_mutex));
 }
 
 /* Called whenever there is new content to read from the buffer. Reads
@@ -287,8 +268,6 @@ void
 rel_read (rel_t *r)
 {
     assert(r);
-    
-    assert(!pthread_mutex_lock(&r->recursive_mutex));
 
     /* If we've read an EOF, no reason to even get started */
 
@@ -308,6 +287,14 @@ rel_read (rel_t *r)
         int len = rel_read_input_into_packet(r, &elem);
         if (len == -1) return; /* no more data to read */
 
+        /* If we read an EOF, then we should check if we should
+         * close the connection. */
+
+        if (len == 0) {
+            r->read_eof = 1;
+            if (rel_check_finished(r)) return;
+        }
+
         /* If this packet sequence number is within the window,
          * then send it */
 
@@ -326,15 +313,7 @@ rel_read (rel_t *r)
 
         r->seqno ++;
 
-        /* If we buffered an EOF, then we're done with reading */
-
-        if (len == 0) {
-            r->read_eof = 1;
-            return;
-        }
     }
-
-    assert(!pthread_mutex_unlock(&r->recursive_mutex));
 }
 
 /* Called whenever there is free buffer space to write output. Handles
@@ -349,8 +328,6 @@ rel_output (rel_t *r)
 {
     assert(r);
     
-    assert(!pthread_mutex_lock(&r->recursive_mutex));
-
     int sent_ack = 0;
 
     /* If we've already printed an EOF, then we're done. */
@@ -380,8 +357,12 @@ rel_output (rel_t *r)
             /* If we just printed out an EOF, update our status */
         
             if (pkt->len == 12) {
-                r->printed_eof = 1;
-                rel_check_finished(r);
+                r->printed_eof = 1; 
+
+                /* If we just destroyed rel_t, we don't want to produce 
+                 * a redundant ack, so we return sent_ack=true. */
+
+                if (rel_check_finished(r)) return 1;
             }
         }
 
@@ -402,8 +383,6 @@ rel_output (rel_t *r)
         else if (bufspace == 0) return sent_ack;
     }
 
-    assert(!pthread_mutex_unlock(&r->recursive_mutex));
-
     return sent_ack;
 }
 
@@ -420,8 +399,6 @@ rel_timer ()
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
     
-        assert(!pthread_mutex_lock(&r->recursive_mutex));
-
         /* Send window is [head of buffer queue, head of buffer queue + window size],
          * so we iterate over the send window, and send anything that's timed out. */
 
@@ -441,8 +418,6 @@ rel_timer ()
                 rel_send_buffered_pkt(r,elem);
             }
         }
-
-        assert(!pthread_mutex_unlock(&r->recursive_mutex));
     }
 }
 
@@ -455,10 +430,12 @@ rel_timer ()
  * bq.h for more details) to free up the space used by packets that
  * have been ack'd. It also sends any buffered packets that are newly
  * within the window, and haven't yet been sent.
+ *
+ * Returns 1 if that ack resulted in closing the connection, 0 if not.
  */
 
-void
-rel_recvack (rel_t *r, int ackno)
+int
+rel_recv_ack (rel_t *r, int ackno)
 {
     assert(r); 
 
@@ -480,7 +457,18 @@ rel_recvack (rel_t *r, int ackno)
 
     /* Check if this is an ack for a Nagle packet */
 
-    rel_ack_nagle(r, ackno);
+    rel_ack_check_nagle(r, ackno);
+
+    /* Check if that was the last of outstanding packet acks, and
+     * we can shutdown the connection. */
+
+    if (rel_check_finished(r)) {
+
+        /* If it was, rel_t has already been destroyed, and any further 
+         * action could crash the program */
+
+        return 1;
+    }
 
     /* Send any buffered packets that are newly within the window */
 
@@ -489,7 +477,7 @@ rel_recvack (rel_t *r, int ackno)
 
         /* If we reach a point we haven't buffered in, we're done. */
 
-        if (!bq_element_buffered(r->send_bq, i)) return;
+        if (!bq_element_buffered(r->send_bq, i)) return 0;
 
         /* Otherwise send out the packet, if noone has sent it yet. */
 
@@ -498,6 +486,8 @@ rel_recvack (rel_t *r, int ackno)
             rel_send_buffered_pkt(r, elem);
         }
     }
+
+    return 0;
 }
 
 /* Sends a buffered packet, and handles updating the meta data
@@ -534,13 +524,6 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     /* Do the dirty deed */
 
     conn_sendpkt(r->c, &(elem->pkt), ntohs(elem->pkt.len));
-
-    /* Update our status if this was an EOF packet */
-
-    if (ntohs(elem->pkt.len) == 12) {
-        r->sent_eof = 1;
-        rel_check_finished(r);
-    }
 
     return 1;
 }
@@ -610,16 +593,48 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
 
 /* Checks if a rel_t has both received and sent an EOF, and if
  * it has, then it calls rel_destroy on the rel_t.
+ *
+ * Specific conditions are:
+ *
+ * - received an EOF from other size
+ * - written all data to conn_output
+ *   (both of the above are true if written an EOF)
+ * - read an EOF from our input (but not necessarily sent it)
+ * - gotten acks for all our outstanding packets
+ *
+ * returns 1 if rel_t was just destroyed, 0 otherwise.
  */
 
-void
-rel_check_finished (rel_t *r_chk)
+int
+rel_check_finished (rel_t *r)
 {
-    assert(r_chk);
+    assert(r);
 
-    if (r_chk->sent_eof && r_chk->printed_eof) {
-        rel_destroy(r_chk);
+    if (!r->read_eof || !r->printed_eof) return 0;
+
+    /* Send window is [head of buffer queue, head of buffer queue + window size],
+     * so we iterate over the send window, and check if there's anything in it that
+     * we've sent (cause that would mean we haven't gotten an ack for that yet). */
+
+    int i = 0;
+    for (i = bq_get_head_seq(r->send_bq); rel_seqno_in_send_window(r,i); i++) {
+
+        /* If the element isn't buffered, we definately haven't sent it */
+
+        if (!bq_element_buffered(r->send_bq, i)) continue;
+
+        /* Otherwise, we check the sent flag */
+
+        send_bq_element_t *elem = bq_get_element(r->send_bq, i);
+        if (elem->sent) return 0;
     }
+
+    /* If we reach here, then we've received all acks for packets we sent, and
+     * both other conditions are met. Destroy this rel_t. */
+
+    rel_destroy(r);
+
+    return 1;
 }
 
 /* This function gets called every ack to update the Nagle 
@@ -629,7 +644,7 @@ rel_check_finished (rel_t *r_chk)
  */
 
 void
-rel_ack_nagle (rel_t *r, int ackno) 
+rel_ack_check_nagle (rel_t *r, int ackno) 
 {
     assert(r);
     assert(ackno > 0);
