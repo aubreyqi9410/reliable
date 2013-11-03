@@ -164,6 +164,10 @@ rel_destroy (rel_t *r)
 
     bq_destroy(r->send_bq);
     bq_destroy(r->rec_bq);
+
+    /* Free the rel_t block */
+
+    free(r);
 }
 
 /* This function only gets called when the process is running as a

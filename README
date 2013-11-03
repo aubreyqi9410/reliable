@@ -1,3 +1,6 @@
+This README is identical for Lab 2 and Lab 3, since Lab 2 is a strict subset of
+Lab 3. For Lab 2, ignore demux.
+
 My work is divided between "reliable.c", "bq.[c|h]". 
 
 "bq.[c|h]" is a buffer queue implementation, providing a memory abstraction of
