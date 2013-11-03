@@ -49,7 +49,7 @@ int bq_destroy(bq_t* bq);
  * imprecise, but it keeps things simple.
  */
 
-void bq_double_size(bq_t* bq)
+void bq_double_size(bq_t* bq);
 
 /**
  * Inserts an element into the queue at the requested index.
