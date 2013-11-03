@@ -287,14 +287,6 @@ rel_read (rel_t *r)
         int len = rel_read_input_into_packet(r, &elem);
         if (len == -1) return; /* no more data to read */
 
-        /* If we read an EOF, then we should check if we should
-         * close the connection. */
-
-        /* if (len == 0) {
-            r->read_eof = 1;
-            if (rel_check_finished(r)) return;
-        } */
-
         /* If this packet sequence number is within the window,
          * then send it */
 
@@ -313,10 +305,12 @@ rel_read (rel_t *r)
 
         r->seqno ++;
 
-        /* Read an EOF, quit */
+        /* If we read an EOF, then we should check if we should
+         * close the connection. */
 
         if (len == 0) {
             r->read_eof = 1;
+            rel_check_finished(r);
             return;
         }
     }
@@ -364,12 +358,7 @@ rel_output (rel_t *r)
             if (pkt->len == 12) {
                 r->printed_eof = 1; 
 
-                /* If we just destroyed rel_t, we don't want to produce 
-                 * a redundant ack, so we return sent_ack=true. */
-
-                if (rel_check_finished(r)) return 1;
-
-                /* Either way, it's time to quit. */
+                /* If we just printed an EOF, we should be done. */
 
                 break;
             }
@@ -393,6 +382,12 @@ rel_output (rel_t *r)
     }
 
     if (sent_ack != 0) rel_send_ack(r, sent_ack);
+
+    /* We could have just printed an eof, so just in case,
+     * we should try destroying the rel_t. If we do, we return
+     * 1 to prevent our caller from producing a redundant ack. */
+
+    if (rel_check_finished(r)) return 1;
 
     return sent_ack;
 }
