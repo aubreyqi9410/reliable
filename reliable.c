@@ -290,10 +290,10 @@ rel_read (rel_t *r)
         /* If we read an EOF, then we should check if we should
          * close the connection. */
 
-        if (len == 0) {
+        /* if (len == 0) {
             r->read_eof = 1;
             if (rel_check_finished(r)) return;
-        }
+        } */
 
         /* If this packet sequence number is within the window,
          * then send it */
@@ -578,10 +578,10 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
-    /* TEMP: read "EOF" as an EOF */
+    /* TESTING ONLY: read "EOF" as an EOF */
 
     if (strncmp(elem->pkt.data,"EOF",3) == 0) {
-        len = 0; /* send an EOF */
+        len = 0;
     }
 
     /* Build packet frame data */

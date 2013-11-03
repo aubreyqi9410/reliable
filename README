@@ -55,7 +55,7 @@ the network, and are checked by rel_timer.
 Connection Teardown:
 ---------------
 
-I keep state about having written an EOF to output (which implies receiving an EOF and priting all available packets) and whether I've read an EOF from input. Every time either of these values change, or I receive an ack, I check if both these conditions are true and I have acks for all outstanding packets. If all conditions are met, I rel_destroy the offending rel_t. This is executed aggressively on receiving an ack, so if an ack causes all conditions to be met, even if I could send
+I keep state about having written an EOF to output (which implies receiving an EOF and priting all available packets) and whether I've read an EOF from input. Every time either of these values change, or I receive an ack, I check if I've printed an EOF and read an EOF from input, and that I have acks for all outstanding packets. If all conditions are met, I rel_destroy the offending rel_t. This is executed aggressively on receiving an ack and reading an EOF, so if an action causes all conditions to be met, even if I could send
 more packets, I kill the rel_t instead.
 
 ---------------
