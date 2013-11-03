@@ -61,6 +61,39 @@ bq_t* bq_new(int num_elements, int element_size)
     return bq;
 }
 
+/* Double the memory size of the buffer, to make some more
+ * space for shtuff.
+ */
+
+void bq_double_size(bq_t* bq)
+{
+    assert(bq);
+
+    void* new_element_buffer = calloc(bq->num_elements * 2, bq->element_size);
+    assert(new_element_buffer);
+    void* new_element_buffered = calloc(bq->num_elements * 2, sizeof(int));
+    assert(new_element_buffered);
+
+    /* We have to move elements one at a time, because the modulo
+     * indexing can mess things up if we just copy in a block. */
+
+    int i;
+    for (i = bq_get_head_seq(bq); i <= bq_get_tail_seq(bq); i++) {
+        if (bq_element_buffered(bq,i)) {
+            int new_index = i % (bq->num_elements * 2);
+            memcpy(new_element_buffer + (new_index * bq->element_size), bq_get_element(bq,i), bq->element_size);
+            new_element_buffered[new_index] = 1;
+        }
+    }
+
+    free(bq->element_buffer);
+    free(bq->element_buffered);
+
+    bq->element_buffer = new_element_buffer;
+    bq->element_buffered = new_element_buffered;
+    bq->num_elements = bq->num_elements*2;
+}
+
 /* Frees all the memory associated with a buffer queue.
  */
 

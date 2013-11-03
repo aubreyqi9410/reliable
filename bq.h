@@ -31,7 +31,7 @@
 
 typedef struct bq {
     void* element_buffer;
-    char* element_buffered;
+    int* element_buffered;
     int num_elements;
     int element_size;
     int head;
@@ -42,6 +42,14 @@ typedef struct bq {
 
 bq_t* bq_new(int num_elements, int element_size);
 int bq_destroy(bq_t* bq);
+
+/**
+ * Doubles the size fo the buffer, useful if a buffer overrun
+ * is about to happen, and more space needs to be made. A bit
+ * imprecise, but it keeps things simple.
+ */
+
+void bq_double_size(bq_t* bq)
 
 /**
  * Inserts an element into the queue at the requested index.

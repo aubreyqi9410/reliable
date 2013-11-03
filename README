@@ -1,10 +1,17 @@
 My work is divided between "reliable.c", "bq.[c|h]". 
 
-"bq.[c|h]" is a buffer queue implementation, providing a memory abstraction of an infinite strip buffer, where I can insert and get elements at any point along the strip. Since sliding-window (and its subset stop-and-wait) only use a certain "window" on the infinite strip at a time, this is possible by modulo indexing into a fixed chunk of memory. For more detailed information (and some ascii art), see "bq.h".
+"bq.[c|h]" is a buffer queue implementation, providing a memory abstraction of
+an infinite strip buffer, where I can insert and get elements at any point along
+the strip. Since sliding-window (and its subset stop-and-wait) only use a
+certain "window" on the infinite strip at a time, this is possible by modulo
+indexing into a fixed chunk of memory. For more detailed information (and some
+ascii art), see "bq.h".
 
-Armed with the abstractions provided by "bq.[c|h]", I've implemented sliding-window (and hence stop-and-wait) with two buffer queues: 
--the first buffer is for packets read in, and either waiting to be sent or waiting to be ack'd.
--the second buffer is for packets receivied, and waiting to be printed, so that they can be ack'd.
+Armed with the abstractions provided by "bq.[c|h]", I've implemented
+sliding-window (and hence stop-and-wait) with two buffer queues: -the first
+buffer is for packets read in, and either waiting to be sent or waiting to be
+ack'd.  -the second buffer is for packets receivied, and waiting to be printed,
+so that they can be ack'd.
 
 ---------------
 Receiving:
@@ -26,7 +33,13 @@ Illustration:
                     6 | (unreachable) Out of window
                       |-------------
 
-With a queue abstraction I don't need to explicitly know which packets are within my receive window, because my buffer queue will just drop packets that I attempt to insert out of bounds. Reading packets out in order also isn't a problem, because I simply read the head of queue when it's available, and ack after I read. This means head-of-line blocking (and hence self-clocking) is implicit in the design, and doesn't need an explicit mechanism. I discuss acks in the next section.
+With a queue abstraction I don't need to explicitly know which packets are
+within my receive window, because my buffer queue will just drop packets that I
+attempt to insert out of bounds. Reading packets out in order also isn't a
+problem, because I simply read the head of queue when it's available, and ack
+after I read. This means head-of-line blocking (and hence self-clocking) is
+implicit in the design, and doesn't need an explicit mechanism. I discuss acks
+in the next section.
 
 ---------------
 Sending:
@@ -48,31 +61,56 @@ extra send buffer-> 5 | (bq tail) Read, not sent
                     6 | (unreachable) out of buffer space
                       |-------------
 
-My send queue holds structs that contain packets with meta data about the last time they were sent. When I receive an ack, I move the head of the send queue up to the ackno, because I'll never need the packets below ackno again. That way I can cleanly reclaim memory without using system calls, by just readjusting a pointer and book-keeping about which slots have valid contents. It also means that all packets within |window size| of my send buffer's head are fair game to be sent across
-the network, and are checked by rel_timer.
+My send queue holds structs that contain packets with meta data about the last
+time they were sent. When I receive an ack, I move the head of the send queue up
+to the ackno, because I'll never need the packets below ackno again. That way I
+can cleanly reclaim memory without using system calls, by just readjusting a
+pointer and book-keeping about which slots have valid contents. It also means
+that all packets within |window size| of my send buffer's head are fair game to
+be sent across the network, and are checked by rel_timer.
 
----------------
-Connection Teardown:
----------------
-
-I keep state about having written an EOF to output (which implies receiving an EOF and priting all available packets) and whether I've read an EOF from input. Every time either of these values change, or I receive an ack, I check if I've printed an EOF and read an EOF from input, and that I have acks for all outstanding packets. If all conditions are met, I rel_destroy the offending rel_t. This is executed aggressively on receiving an ack and reading an EOF, so if an action causes all conditions to be met, even if I could send
-more packets, I kill the rel_t instead.
-
----------------
-TCP Nagle:
+--------------- 
+Connection Teardown: 
 ---------------
 
-I keep state about the seqno of an outstanding packet that is smaller than full size. If that value is non-zero, I don't send any packets with a different seqno that are smaller than full size. If I receive an ack where ackno > nagle_seqno, then nagle_seqno = 0. I don't bother coalescing small packets together, because I'd rather the system works slowly and simply than is efficient and complicated.
+I keep state about having written an EOF to output (which implies receiving an
+EOF and priting all available packets) and whether I've read an EOF from input.
+Every time either of these values change, or I receive an ack, I check if I've
+printed an EOF and read an EOF from input, and that I have acks for all
+outstanding packets. If all conditions are met, I rel_destroy the offending
+rel_t. This is executed aggressively on receiving an ack and reading an EOF, so
+if an action causes all conditions to be met, even if I could send more packets,
+    I kill the rel_t instead.
 
----------------
-Demux:
----------------
-
-I just keep a sockaddr_storage in all my rel_t's (in server mode), and whenever I receive a new packet, I walk the linked list of rel_t's until I find a matching sockaddr_storage. If I don't find one, I allocate a new rel_t.
-
----------------
-Buffering concerns with my implementation:
+--------------- 
+TCP Nagle: 
 ---------------
 
-Since rel_read expects that you read the entire input buffer every time it is called, I have to buffer all input in memory until I receive acks for it. I allocate SEND_BUFFER_SIZE (defined in reliable.c) packets of buffer for read in, un-ack'd packets. That means that if a very large file is piped into my reliable transport, it will crash, because it will overrun the send bq's allocated space before I get a chance to free space by receiving acks. I chose not to handle realloc inside of
-bq, because I wanted the system to be as simple as possible, for the beauty of it. If buffer overrun is a problem during testing, reliable.c can be recompiled with a larger SEND_BUFFER_SIZE. I submitted a version with 10000 packets (500 kbytes) of buffer space.
+I keep state about the seqno of an outstanding packet that is smaller than full
+size. If that value is non-zero, I don't send any packets with a different seqno
+that are smaller than full size. If I receive an ack where ackno > nagle_seqno,
+then nagle_seqno = 0. I don't bother coalescing small packets together, because
+I'd rather the system works slowly and simply than is efficient and complicated.
+
+--------------- 
+Demux: 
+---------------
+
+I just keep a sockaddr_storage in all my rel_t's (in server mode), and whenever
+I receive a new packet, I walk the linked list of rel_t's until I find a
+matching sockaddr_storage. If I don't find one, I allocate a new rel_t.
+
+--------------- 
+Buffering concerns with my implementation: 
+---------------
+
+Since rel_read expects that you read the entire input buffer every time it is
+called, I have to buffer all input in memory until I receive acks for it. I
+allocate SEND_BUFFER_SIZE (defined in reliable.c) packets of buffer for read in,
+un-ack'd packets. That means that if a very large file is piped into my reliable
+transport, it will crash, because it will overrun the send bq's allocated space
+before I get a chance to free space by receiving acks. I chose not to handle
+realloc inside of bq, because I wanted the system to be as simple as possible,
+for the beauty of it. If buffer overrun is a problem during testing, reliable.c
+can be recompiled with a larger SEND_BUFFER_SIZE. I submitted a version with 
+10000 packets (500 kbytes) of buffer space.

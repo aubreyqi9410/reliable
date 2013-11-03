@@ -16,7 +16,7 @@
 #include "rlib.h"
 #include "bq.h"
 
-#define SEND_BUFFER_SIZE 10000
+#define SEND_BUFFER_SIZE 1
 
 
 struct reliable_state {
@@ -279,7 +279,13 @@ rel_read (rel_t *r)
 
         /* Check for overrunning send buffer memory */
 
-        assert(r->seqno <= bq_get_tail_seq(r->send_bq));
+        if (r->seqno > bq_get_tail_seq(r->send_bq)) {
+
+            /* Double our buffer size */
+
+            printf("Doubling buffer size\n");
+            bq_double_size(r->send_bq);
+        }
 
         /* Read up to 500 bytes into a packet, overwriting the old
          * contents of elem */
