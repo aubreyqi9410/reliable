@@ -365,6 +365,10 @@ rel_output (rel_t *r)
                  * a redundant ack, so we return sent_ack=true. */
 
                 if (rel_check_finished(r)) return 1;
+
+                /* Either way, it's time to quit. */
+
+                break;
             }
         }
 
