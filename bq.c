@@ -71,7 +71,7 @@ void bq_double_size(bq_t* bq)
 
     void* new_element_buffer = calloc(bq->num_elements * 2, bq->element_size);
     assert(new_element_buffer);
-    void* new_element_buffered = calloc(bq->num_elements * 2, sizeof(int));
+    int* new_element_buffered = calloc(bq->num_elements * 2, sizeof(int));
     assert(new_element_buffered);
 
     /* We have to move elements one at a time, because the modulo
