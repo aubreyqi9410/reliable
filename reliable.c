@@ -465,11 +465,15 @@ rel_recv_ack (rel_t *r, int ackno)
 {
     assert(r); 
 
-    /* Shouldn't get acks for stuff we haven't sent,
-     * or an ack that's lower than a previous ack */
+    /* Shouldn't get acks for stuff we haven't sent */
 
     assert(ackno < bq_get_head_seq(r->send_bq) + r->window + 1);
-    assert(ackno >= bq_get_head_seq(r->send_bq));
+
+    /* Can receive and ack that's lower than a previous ack, so we ignore it */
+
+    if (ackno >= bq_get_head_seq(r->send_bq)) {
+        return 0;
+    }
 
     fprintf(stderr,"%i, Receiving ack %i\n",getpid(),ackno);
 
