@@ -518,6 +518,7 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     assert(elem);
     assert(ntohl(elem->pkt.seqno) < bq_get_head_seq(r->send_bq) + r->window);
     assert(ntohl(elem->pkt.seqno) > 0);
+    fprintf(stderr,"Sending packet %i\n",ntohl(elem->pkt.seqno));
 
     /* If this is a small packet, check Nagle conditions */
 
@@ -554,6 +555,7 @@ rel_send_ack (rel_t *r, int ackno)
     assert(r);
     assert(ackno >= r->ackno); /* Acks cannot regress */
 
+    fprintf("Sending ack %i\n",ackno);
     r->ackno = ackno;
 
     /* Build the ack packet */
@@ -590,12 +592,7 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
-    fprintf(stderr,"Read:\n");
-    int i;
-    for (i = 0; i < len; i++) {
-        fprintf(stderr,"%c",elem->pkt.data[i]);
-    }
-    fprintf(stderr,"\n");
+    fprintf(stderr,"Read %i bytes packet\n",len);
 
     /* Build packet frame data */
 
