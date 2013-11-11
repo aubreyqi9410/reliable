@@ -672,7 +672,6 @@ rel_check_finished (rel_t *r)
     }
 
     fprintf(stderr,"%i finished all packets up to %i\n",getpid(),i-1);
-    int i = 0;
     for (i = bq_get_head_seq(r->send_bq); i <= bq_get_tail_seq(r->send_bq); i++) {
         if (!bq_element_buffered(r->send_bq, i)) fprintf(stderr,"%i finished packet %i - unbuffered\n",getpid(),i);
         else fprintf(stderr,"%i finished packet %i - sent\n",getpid(),i);
