@@ -410,15 +410,10 @@ rel_output (rel_t *r)
 void
 rel_timer ()
 {
-
     /* Iterate over all the reliable connections */
 
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
-
-        /* Poke the output, just in case it died on us */
-
-        rel_output(r);
     
         /* Send window is [head of buffer queue, head of buffer queue + window size],
          * so we iterate over the send window, and send anything that's timed out. */
@@ -464,7 +459,7 @@ rel_recv_ack (rel_t *r, int ackno)
 
     assert(ackno < bq_get_head_seq(r->send_bq) + r->window + 1);
 
-    /* Can receive and ack that's lower than a previous ack, so we ignore it */
+    /* is possible to get an ack that's lower than a previous ack */
 
     if (ackno < bq_get_head_seq(r->send_bq)) {
         return 0;
@@ -635,16 +630,14 @@ rel_check_finished (rel_t *r)
 {
     assert(r);
 
-    if (!r->read_eof || !r->printed_eof) {
-        return 0;
-    }
+    if (!r->read_eof || !r->printed_eof) return 0;
 
     /* Send window is [head of buffer queue, head of buffer queue + window size],
      * so we iterate over the send window, and check if there's anything in it that
      * we've sent (cause that would mean we haven't gotten an ack for that yet). */
 
     int i = 0;
-    for (i = bq_get_head_seq(r->send_bq); i <= bq_get_tail_seq(r->send_bq); i++) {
+    for (i = bq_get_head_seq(r->send_bq); rel_seqno_in_send_window(r,i); i++) {
 
         /* If the element isn't buffered, we definately haven't sent it */
 
@@ -653,9 +646,7 @@ rel_check_finished (rel_t *r)
         /* Otherwise, we check the sent flag */
 
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
-        if (!elem->sent) {
-            return 0;
-        }
+        if (!elem->sent) return 0;
     }
 
     /* If we reach here, then we've received all acks for packets we sent, and

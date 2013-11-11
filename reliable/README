@@ -1,0 +1,154 @@
+This README is identical for Lab 2 and Lab 3, since Lab 2 is a strict subset of
+Lab 3. For Lab 2, ignore Demux and Valgrind sections.
+
+---------------
+Summary:
+---------------
+
+My work is divided between "reliable.c", "bq.[c|h]". 
+
+"bq.[c|h]" is a buffer queue implementation, providing a memory abstraction of
+an infinite strip buffer, where I can insert and get elements at any point along
+the strip. Since sliding-window (and its subset stop-and-wait) only use a
+certain "window" on the infinite strip at a time, this is possible by modulo
+indexing into a fixed chunk of memory. For more detailed information (and some
+ascii art), see "bq.h".
+
+Armed with the abstractions provided by "bq.[c|h]", I've implemented
+sliding-window (and hence stop-and-wait) with two buffer queues: 
+
+ - the first buffer is for packets read in, and either waiting to be sent or 
+waiting to be ack'd.  
+
+ - the second buffer is for packets receivied, and waiting to be printed, so that 
+they can be ack'd.
+
+---------------
+Receiving:
+---------------
+
+Illustration of the queue:
+
+                      |-------------
+                    1 | (unreachable) printed
+                      |-------------
+           ackno -> 2 | (bq head) Received, half printed, not ack'd
+                      |-------------
+                    3 | Received, not printed, not ack'd
+                      |-------------
+                    4 | Not yet received
+                      |-------------
+                    5 | (bq tail) Not yet received
+                      |-------------
+                    6 | (unreachable) Out of window
+                      |-------------
+
+With a queue abstraction I don't need to explicitly know which packets are
+within my receive window, because my buffer queue will just drop packets that I
+attempt to insert out of bounds. Reading packets out in order also isn't a
+problem, because I simply read the head of queue when it's available, and ack
+after I read. This means head-of-line blocking (and hence self-clocking) is
+implicit in the design, and doesn't need an explicit mechanism. I discuss acks
+in the next section.
+
+---------------
+Sending:
+---------------
+
+Illustration of the queue:
+
+                      |-------------
+                    1 | (unreachable) ack'd
+                      |-------------
+           ackno -> 2 | (bq head) Sent, not ack'd
+                      |-------------
+                    3 | Sent, not ack'd
+                      |-------------
+  ackno + window -> 3 | Sent, not ack'd
+                      |-------------
+extra send buffer-> 5 | (bq tail) Read, not sent
+                      |-------------
+                    6 | (unreachable) out of buffer space
+                      |-------------
+
+My send queue holds structs that contain packets with meta data about the last
+time they were sent. When I receive an ack, I move the head of the send queue up
+to the ackno, because I'll never need the packets below ackno again. That way I
+can cleanly reclaim memory without using system calls, by just readjusting a
+pointer and book-keeping about which slots have valid contents. It also means
+that all packets within |window size| of my send buffer's head are fair game to
+be sent across the network, and are checked by rel_timer. If the queue ever
+fills all the way up, I double the size of the buffer, so as long as you have
+memory in the system, you should be able to pipe a very large file across the
+network without issue.
+
+--------------- 
+Connection Teardown: 
+---------------
+
+I keep state about having written an EOF to output (which implies receiving an
+EOF and priting all available packets) and whether I've read an EOF from input.
+Every time either of these values change, or I receive an ack, I check if I've
+printed an EOF and read an EOF from input, and that I have acks for all
+outstanding packets. If all conditions are met, I rel_destroy the offending
+rel_t. This is executed aggressively on receiving an ack and reading an EOF, so
+if an action causes all conditions to be met, even if I could send more packets,
+    I kill the rel_t instead.
+
+--------------- 
+TCP Nagle: 
+---------------
+
+I keep state about the seqno of an outstanding packet that is smaller than full
+size. If that value is non-zero, I don't send any packets with a different seqno
+that are smaller than full size. If I receive an ack where ackno > nagle_seqno,
+then nagle_seqno = 0. I don't bother coalescing small packets together, because
+I'd rather the system works slowly and simply than is efficient and complicated.
+
+--------------- 
+Demux: 
+---------------
+
+I just keep a sockaddr_storage in all my rel_t's (in server mode), and whenever
+I receive a new packet, I walk the linked list of rel_t's until I find a
+matching sockaddr_storage. If I don't find one, I allocate a new rel_t.
+
+--------------
+Valgrind:
+--------------
+
+I ran the server, created two simultaneous connections, then closed both
+connections with EOFs, and then closed the server with a ^C. This is the
+resulting Valgrind output:
+
+<TERMINAL OUTPUT>
+===============================================================================
+myth1:~/cs144/reliable> valgrind --leak-check=full ./reliable -s 8000 localhost:8000
+==3823== Memcheck, a memory error detector
+==3823== Copyright (C) 2002-2011, and GNU GPL'd, by Julian Seward et al.
+==3823== Using Valgrind-3.7.0 and LibVEX; rerun with -h for copyright info
+==3823== Command: ./reliable -s 8000 localhost:8000
+==3823== 
+[listening on UDP port 8000]
+^C==3823== 
+==3823== HEAP SUMMARY:
+==3823==     in use at exit: 48 bytes in 3 blocks
+==3823==   total heap usage: 87 allocs, 84 frees, 9,527 bytes allocated
+==3823== 
+==3823== LEAK SUMMARY:
+==3823==    definitely lost: 0 bytes in 0 blocks
+==3823==    indirectly lost: 0 bytes in 0 blocks
+==3823==      possibly lost: 0 bytes in 0 blocks
+==3823==    still reachable: 48 bytes in 3 blocks
+==3823==         suppressed: 0 bytes in 0 blocks
+==3823== Reachable blocks (those to which a pointer was found) are not shown.
+==3823== To see them, rerun with: --leak-check=full --show-reachable=yes
+==3823== 
+==3823== For counts of detected and suppressed errors, rerun with: -v
+==3823== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 2 from 2)
+===============================================================================
+</TERMINAL OUTPUT>
+
+The still reachable blocks are all within rlib's jurisdiction, and show up in 
+the reference solution as well. All the rel_t's are getting cleaned up when they
+are destroyed.
