@@ -635,7 +635,7 @@ rel_check_finished (rel_t *r)
     assert(r);
 
     if (!r->read_eof || !r->printed_eof) {
-        fprintf(stderr,"%i not finished, not read or printed eof\n");
+        fprintf(stderr,"%i not finished, not read or printed eof\n",getpid());
         return 0;
     }
 
