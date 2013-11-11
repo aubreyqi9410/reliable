@@ -634,7 +634,10 @@ rel_check_finished (rel_t *r)
 {
     assert(r);
 
-    if (!r->read_eof || !r->printed_eof) return 0;
+    if (!r->read_eof || !r->printed_eof) {
+        fprintf(stderr,"%i not finished, not read or printed eof\n");
+        return 0;
+    }
 
     /* Send window is [head of buffer queue, head of buffer queue + window size],
      * so we iterate over the send window, and check if there's anything in it that
@@ -650,7 +653,10 @@ rel_check_finished (rel_t *r)
         /* Otherwise, we check the sent flag */
 
         send_bq_element_t *elem = bq_get_element(r->send_bq, i);
-        if (elem->sent) return 0;
+        if (elem->sent) {
+            fprintf(stderr,"%i not finished, %i unsent\n",getpid(),ntohl(elem->pkt.seqno));
+            return 0;
+        }
     }
 
     fprintf(stderr,"%i finished\n",getpid());
