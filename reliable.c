@@ -604,7 +604,7 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
-    fprintf(stderr,"%i, Read %i bytes packet\n",getpid(),len);
+    fprintf(stderr,"%i, Read %i bytes packet %i\n",getpid(),len,r->seqno);
 
     /* Build packet frame data */
 
