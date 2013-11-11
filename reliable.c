@@ -653,6 +653,8 @@ rel_check_finished (rel_t *r)
         if (elem->sent) return 0;
     }
 
+    fprintf(stderr,"%i finished\n",getpid());
+
     /* If we reach here, then we've received all acks for packets we sent, and
      * both other conditions are met. Destroy this rel_t. */
 
