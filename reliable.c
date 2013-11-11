@@ -555,7 +555,7 @@ rel_send_ack (rel_t *r, int ackno)
     assert(r);
     assert(ackno >= r->ackno); /* Acks cannot regress */
 
-    fprintf("Sending ack %i\n",ackno);
+    fprintf(stderr,"Sending ack %i\n",ackno);
     r->ackno = ackno;
 
     /* Build the ack packet */
