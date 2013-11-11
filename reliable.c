@@ -410,6 +410,8 @@ rel_output (rel_t *r)
 void
 rel_timer ()
 {
+    fprintf(stderr,"%i, running timer\n",getpid(),ackno);
+
     /* Iterate over all the reliable connections */
 
     rel_t *r;
@@ -460,6 +462,8 @@ rel_recv_ack (rel_t *r, int ackno)
 
     assert(ackno < bq_get_head_seq(r->send_bq) + r->window + 1);
     assert(ackno >= bq_get_head_seq(r->send_bq));
+
+    fprintf(stderr,"%i, Receiving ack %i\n",getpid(),ackno);
 
     /* Move the head of the window to the ackno */
 
@@ -518,7 +522,7 @@ rel_send_buffered_pkt(rel_t *r, send_bq_element_t* elem)
     assert(elem);
     assert(ntohl(elem->pkt.seqno) < bq_get_head_seq(r->send_bq) + r->window);
     assert(ntohl(elem->pkt.seqno) > 0);
-    fprintf(stderr,"Sending packet %i\n",ntohl(elem->pkt.seqno));
+    fprintf(stderr,"%i, Sending packet %i\n",getpid(),ntohl(elem->pkt.seqno));
 
     /* If this is a small packet, check Nagle conditions */
 
@@ -555,7 +559,7 @@ rel_send_ack (rel_t *r, int ackno)
     assert(r);
     assert(ackno >= r->ackno); /* Acks cannot regress */
 
-    fprintf(stderr,"Sending ack %i\n",ackno);
+    fprintf(stderr,"%i, Sending ack %i\n",getpid(),ackno);
     r->ackno = ackno;
 
     /* Build the ack packet */
@@ -592,7 +596,7 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
-    fprintf(stderr,"Read %i bytes packet\n",len);
+    fprintf(stderr,"%i, Read %i bytes packet\n",getpid(),len);
 
     /* Build packet frame data */
 
