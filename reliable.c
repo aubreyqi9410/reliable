@@ -471,7 +471,7 @@ rel_recv_ack (rel_t *r, int ackno)
 
     /* Can receive and ack that's lower than a previous ack, so we ignore it */
 
-    if (ackno >= bq_get_head_seq(r->send_bq)) {
+    if (ackno < bq_get_head_seq(r->send_bq)) {
         return 0;
     }
 
