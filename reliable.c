@@ -416,6 +416,10 @@ rel_timer ()
 
     rel_t *r;
     for (r = rel_list; r != NULL; r = r->next) {
+
+        /* Poke the output, just in case it died on us */
+
+        rel_output(r);
     
         /* Send window is [head of buffer queue, head of buffer queue + window size],
          * so we iterate over the send window, and send anything that's timed out. */
