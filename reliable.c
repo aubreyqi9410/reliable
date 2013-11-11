@@ -233,6 +233,10 @@ rel_recvpkt (rel_t *r, packet_t *pkt, size_t n)
     pkt->seqno = ntohl(pkt->seqno);
     pkt->ackno = ntohl(pkt->ackno);
 
+    if (pkt->len == 12) {
+        fprintf(stderr,"%i, received EOF packet\n",getpid());
+    }
+
     /* Read ack nums on all packets, regardless of data or
      * ack. */
 
