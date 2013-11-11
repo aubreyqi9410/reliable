@@ -590,6 +590,13 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
+    printf("Read:\n");
+    int i;
+    for (i = 0; i < len; i++) {
+        printf("%c",elem->pkt.data[i]);
+    }
+    printf("\n");
+
     /* Build packet frame data */
 
     elem->pkt.ackno = htonl(r->ackno);
