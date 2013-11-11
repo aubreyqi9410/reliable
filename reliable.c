@@ -590,12 +590,12 @@ rel_read_input_into_packet(rel_t *r, send_bq_element_t *elem)
         len = 0; /* send an EOF */
     }
 
-    printf("Read:\n");
+    fprintf(stderr,"Read:\n");
     int i;
     for (i = 0; i < len; i++) {
-        printf("%c",elem->pkt.data[i]);
+        fprintf(stderr,"%c",elem->pkt.data[i]);
     }
-    printf("\n");
+    fprintf(stderr,"\n");
 
     /* Build packet frame data */
 

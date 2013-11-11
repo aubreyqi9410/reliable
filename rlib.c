@@ -1019,7 +1019,7 @@ main (int argc, char **argv)
   else
     progname = argv[0];
 
-  while ((opt = getopt_long (argc, argv, "cdustrpyqe:w:l", o, NULL)) != -1)
+  while ((opt = getopt_long (argc, argv, "cdust:r:p:y:q:e:w:l", o, NULL)) != -1)
     switch (opt) {
     case 'c':
       opt_client = 1;
@@ -1054,7 +1054,7 @@ main (int argc, char **argv)
 	  perror (name);
       }
       break;
-    case 'k':
+    case 'u':
       opt_unix = 1;
       break;
     case 's':
