@@ -671,7 +671,7 @@ rel_check_finished (rel_t *r)
         }
     }
 
-    fprintf(stderr,"%i finished\n",getpid());
+    fprintf(stderr,"%i finished all packets up to %i\n",getpid(),i-1);
 
     /* If we reach here, then we've received all acks for packets we sent, and
      * both other conditions are met. Destroy this rel_t. */
