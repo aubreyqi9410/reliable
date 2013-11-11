@@ -410,7 +410,7 @@ rel_output (rel_t *r)
 void
 rel_timer ()
 {
-    fprintf(stderr,"%i, running timer\n",getpid(),ackno);
+    fprintf(stderr,"%i, running timer\n",getpid());
 
     /* Iterate over all the reliable connections */
 
