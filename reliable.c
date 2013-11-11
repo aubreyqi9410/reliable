@@ -656,7 +656,7 @@ rel_check_finished (rel_t *r)
      * we've sent (cause that would mean we haven't gotten an ack for that yet). */
 
     int i = 0;
-    for (i = bq_get_head_seq(r->send_bq); rel_seqno_in_send_window(r,i); i++) {
+    for (i = bq_get_head_seq(r->send_bq); i <= bq_get_tail_seq(r->send_bq); i++) {
 
         /* If the element isn't buffered, we definately haven't sent it */
 
